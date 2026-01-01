@@ -1,0 +1,36 @@
+# 服务器配置
+server:
+  port: 8101          # 端口号，设为 8101 防止和默认的 8080 冲突
+  servlet:
+    context-path: /api # 全局接口前缀，这样所有接口都会带上 /api，方便反向代理
+
+# Spring 配置
+spring:
+  application:
+    name: nano-oj-backend
+  # 数据库连接配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 这里的 nano_oj 要和你之前建库的名字一致
+    # serverTimezone=Asia/Shanghai 很重要，防止时间差8小时
+    url: jdbc:mysql://localhost:3306/nano_oj?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 20031012
+
+  # Jackson 配置 (解决日期格式化问题)
+  Jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+# MyBatis Plus 配置
+mybatis-plus:
+  configuration:
+    # 开启 SQL 日志打印 (非常重要，开发时能在控制台看到执行了什么 SQL)
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 驼峰命名自动转换 (比如 user_name -> userName)
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: isDelete # 全局逻辑删除字段
+      logic-delete-value: 1        # 1 代表已删除
+      logic-not-delete-value: 0    # 0 代表未删除
