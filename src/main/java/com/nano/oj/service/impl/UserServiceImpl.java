@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.nano.oj.mapper.UserMapper;
 import com.nano.oj.model.entity.User;
+import com.nano.oj.model.vo.LoginUserVO;
 import com.nano.oj.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.StringUtils; // 如果爆红，看下面的提示
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -136,5 +138,27 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 移除登录态，就是这么简单
         request.getSession().removeAttribute("user_login_state");
         return true;
+    }
+
+    /**
+     * 是否为管理员
+     */
+    @Override
+    public boolean isAdmin(User user) {
+        return user != null && "admin".equals(user.getUserRole());
+    }
+
+    /**
+     * 获取脱敏后的登录用户信息
+     */
+    @Override
+    public LoginUserVO getLoginUserVO(User user) {
+        if (user == null) {
+            return null;
+        }
+        LoginUserVO loginUserVO = new LoginUserVO();
+        // 自动把 User 的属性复制给 LoginUserVO (名字一样的字段)
+        BeanUtils.copyProperties(user, loginUserVO);
+        return loginUserVO;
     }
 }
