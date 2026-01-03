@@ -8,6 +8,8 @@ import com.nano.oj.common.ResultUtils;
 import com.nano.oj.exception.BusinessException;
 import com.nano.oj.model.dto.post.PostAddRequest;
 import com.nano.oj.model.dto.post.PostQueryRequest;
+import com.nano.oj.model.dto.post.PostUpdateRequest;
+import com.nano.oj.model.dto.problem.DeleteRequest;
 import com.nano.oj.model.entity.Post;
 import com.nano.oj.model.entity.User;
 import com.nano.oj.model.vo.PostVO;
@@ -106,5 +108,66 @@ public class PostController {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
         return ResultUtils.success(postService.getPostVO(post));
+    }
+
+    /**
+     * 编辑帖子
+     */
+    @PostMapping("/update")
+    public BaseResponse<Boolean> updatePost(@RequestBody PostUpdateRequest postUpdateRequest,
+                                            HttpServletRequest request) {
+        if (postUpdateRequest == null || postUpdateRequest.getId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        Post post = new Post();
+        BeanUtils.copyProperties(postUpdateRequest, post);
+
+        // 处理 tags
+        List<String> tags = postUpdateRequest.getTags();
+        if (tags != null) {
+            post.setTags(GSON.toJson(tags));
+        }
+
+        // 校验权限
+        User loginUser = userService.getLoginUser(request);
+        long id = postUpdateRequest.getId();
+        Post oldPost = postService.getById(id);
+        if (oldPost == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
+        }
+
+        // 只有作者本人或管理员可以修改
+        if (!oldPost.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
+
+        boolean result = postService.updateById(post);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 删除帖子
+     */
+    @PostMapping("/delete")
+    public BaseResponse<Boolean> deletePost(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
+        if (deleteRequest == null || deleteRequest.getId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        User loginUser = userService.getLoginUser(request);
+        long id = deleteRequest.getId();
+        Post oldPost = postService.getById(id);
+        if (oldPost == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
+        }
+
+        // 只有作者本人或管理员可以删除
+        if (!oldPost.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
+
+        boolean b = postService.removeById(id);
+        return ResultUtils.success(b);
     }
 }
