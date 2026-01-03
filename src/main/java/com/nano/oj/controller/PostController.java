@@ -92,4 +92,19 @@ public class PostController {
         // 转换为 VO
         return ResultUtils.success(postService.getPostVOPage(postPage));
     }
+
+    /**
+     * 根据 id 获取帖子详情
+     */
+    @GetMapping("/get/vo")
+    public BaseResponse<PostVO> getPostVOById(long id, HttpServletRequest request) {
+        if (id <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Post post = postService.getById(id);
+        if (post == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
+        }
+        return ResultUtils.success(postService.getPostVO(post));
+    }
 }

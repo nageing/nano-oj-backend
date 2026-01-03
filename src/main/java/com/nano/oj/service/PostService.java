@@ -21,4 +21,9 @@ public interface PostService extends IService<Post> {
      * 分页获取帖子封装
      */
     Page<PostVO> getPostVOPage(Page<Post> postPage);
+
+    /**
+     * 获取单条帖子的详细信息
+     */
+    PostVO getPostVO(Post post);
 }

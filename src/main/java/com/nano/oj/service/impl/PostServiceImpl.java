@@ -85,4 +85,25 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         postVOPage.setRecords(postVOList);
         return postVOPage;
     }
+
+    @Override
+    public PostVO getPostVO(Post post) {
+        if (post == null) {
+            return null;
+        }
+        PostVO postVO = PostVO.objToVo(post);
+        // 1. 关联查询用户信息
+        Long userId = post.getUserId();
+        User user = null;
+        if (userId != null && userId > 0) {
+            user = userService.getById(userId);
+        }
+        // 转换 User -> UserVO
+        if (user != null) {
+            UserVO userVO = new UserVO();
+            BeanUtils.copyProperties(user, userVO);
+            postVO.setUser(userVO);
+        }
+        return postVO;
+    }
 }
