@@ -1,9 +1,11 @@
 package com.nano.oj.model.vo;
 
 import cn.hutool.json.JSONUtil;
+import com.nano.oj.model.dto.problemsubmit.JudgeInfo;
 import com.nano.oj.model.entity.QuestionSubmit;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
+
 import java.io.Serializable;
 import java.util.Date;
 
@@ -15,7 +17,12 @@ public class ProblemSubmitVO implements Serializable {
     private Long id;
     private String language;
     private String code;
-    private String judgeInfo;
+
+    /**
+     * JudgeInfo 对象
+     */
+    private JudgeInfo judgeInfo;
+
     private Integer status;
     private Long questionId;
     private Long userId;
@@ -41,6 +48,13 @@ public class ProblemSubmitVO implements Serializable {
         }
         ProblemSubmitVO problemSubmitVO = new ProblemSubmitVO();
         BeanUtils.copyProperties(questionSubmit, problemSubmitVO);
+
+        // ✨ 重点修改：手动把 String 转成 JudgeInfo 对象
+        String judgeInfoStr = questionSubmit.getJudgeInfo();
+        if (judgeInfoStr != null) {
+            problemSubmitVO.setJudgeInfo(JSONUtil.toBean(judgeInfoStr, JudgeInfo.class));
+        }
+
         return problemSubmitVO;
     }
 

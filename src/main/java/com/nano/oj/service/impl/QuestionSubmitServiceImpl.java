@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.nano.oj.common.ErrorCode;
 import com.nano.oj.exception.BusinessException;
+import com.nano.oj.judge.JudgeService;
 import com.nano.oj.mapper.QuestionSubmitMapper;
 import com.nano.oj.model.dto.problemsubmit.ProblemSubmitAddRequest;
 import com.nano.oj.model.entity.Problem;
@@ -18,9 +19,11 @@ import com.nano.oj.service.UserService;
 import jakarta.annotation.Resource;
 import cn.hutool.core.collection.CollUtil;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +39,11 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
     @Resource
     private UserService userService;
 
+    // ✨✨✨ 引入判题服务，必须加 @Lazy 避免循环依赖 ✨✨✨
+    @Resource
+    @Lazy
+    private JudgeService judgeService;
+
     /**
      * 提交代码
      *
@@ -45,7 +53,7 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
      */
     @Override
     public long doQuestionSubmit(ProblemSubmitAddRequest problemSubmitAddRequest, User loginUser) {
-        // 1. 校验编程语言 (暂时只支持 java, cpp, python, go)
+        // 1. 校验编程语言
         String language = problemSubmitAddRequest.getLanguage();
         if (!"java".equals(language) && !"cpp".equals(language) && !"python".equals(language) && !"go".equals(language)) {
             throw new RuntimeException("编程语言错误");
@@ -75,7 +83,14 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
             throw new RuntimeException("数据插入失败");
         }
 
-        return questionSubmit.getId();
+        Long questionSubmitId = questionSubmit.getId();
+
+        // ✨✨✨ 关键点：异步调用判题服务 ✨✨✨
+        CompletableFuture.runAsync(() -> {
+            judgeService.doJudge(questionSubmitId);
+        });
+
+        return questionSubmitId;
     }
 
     /**
@@ -87,6 +102,7 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
      */
     @Override
     public ProblemSubmitVO getProblemSubmitVO(QuestionSubmit questionSubmit, User loginUser) {
+        // 使用 ProblemSubmitVO.objToVo 自动转换 judgeInfo (String -> Object)
         ProblemSubmitVO problemSubmitVO = ProblemSubmitVO.objToVo(questionSubmit);
 
         // 脱敏：如果不是本人，也不是管理员，则不返回代码
