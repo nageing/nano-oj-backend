@@ -2,6 +2,7 @@ package com.nano.oj.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.nano.oj.model.dto.problemsubmit.ProblemRunRequest;
 import com.nano.oj.model.dto.problemsubmit.ProblemSubmitAddRequest;
 import com.nano.oj.model.entity.QuestionSubmit;
 import com.nano.oj.model.entity.User;
@@ -30,4 +31,9 @@ public interface QuestionSubmitService extends IService<QuestionSubmit> {
      * 分页获取封装
      */
     Page<ProblemSubmitVO> getProblemSubmitVOPage(Page<QuestionSubmit> questionSubmitPage, User loginUser);
+
+    /**
+     * 运行代码 (自测)
+     */
+    ProblemSubmitVO doQuestionRun(ProblemRunRequest runRequest, User loginUser);
 }

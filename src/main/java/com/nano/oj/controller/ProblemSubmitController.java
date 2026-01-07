@@ -6,6 +6,7 @@ import com.nano.oj.common.BaseResponse;
 import com.nano.oj.common.ErrorCode;
 import com.nano.oj.common.ResultUtils;
 import com.nano.oj.exception.BusinessException;
+import com.nano.oj.model.dto.problemsubmit.ProblemRunRequest;
 import com.nano.oj.model.dto.problemsubmit.ProblemSubmitAddRequest;
 import com.nano.oj.model.dto.problemsubmit.ProblemSubmitQueryRequest;
 import com.nano.oj.model.entity.QuestionSubmit;
@@ -102,5 +103,21 @@ public class ProblemSubmitController {
         }
 
         return queryWrapper;
+    }
+
+    /**
+     * 运行代码 (自测)
+     */
+    @PostMapping("/run")
+    public BaseResponse<ProblemSubmitVO> doRun(@RequestBody ProblemRunRequest runRequest,
+                                               HttpServletRequest request) {
+        if (runRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        // 登录校验
+        User loginUser = userService.getLoginUser(request);
+
+        ProblemSubmitVO res = questionSubmitService.doQuestionRun(runRequest, loginUser);
+        return ResultUtils.success(res);
     }
 }

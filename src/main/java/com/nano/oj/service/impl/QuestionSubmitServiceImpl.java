@@ -5,7 +5,13 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.nano.oj.common.ErrorCode;
 import com.nano.oj.exception.BusinessException;
 import com.nano.oj.judge.JudgeService;
+import com.nano.oj.judge.codesandbox.CodeSandbox;
+import com.nano.oj.judge.codesandbox.impl.DockerCodeSandbox;
+import com.nano.oj.judge.codesandbox.model.ExecuteCodeRequest;
+import com.nano.oj.judge.codesandbox.model.ExecuteCodeResponse;
 import com.nano.oj.mapper.QuestionSubmitMapper;
+import com.nano.oj.model.dto.problemsubmit.JudgeInfo;
+import com.nano.oj.model.dto.problemsubmit.ProblemRunRequest;
 import com.nano.oj.model.dto.problemsubmit.ProblemSubmitAddRequest;
 import com.nano.oj.model.entity.Problem;
 import com.nano.oj.model.entity.QuestionSubmit;
@@ -18,10 +24,12 @@ import com.nano.oj.service.QuestionSubmitService;
 import com.nano.oj.service.UserService;
 import jakarta.annotation.Resource;
 import cn.hutool.core.collection.CollUtil;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -44,6 +52,9 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
     @Lazy
     private JudgeService judgeService;
 
+
+    @Resource
+    private DockerCodeSandbox dockerCodeSandbox;
     /**
      * 提交代码
      *
@@ -156,5 +167,58 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
 
         problemSubmitVOPage.setRecords(problemSubmitVOList);
         return problemSubmitVOPage;
+    }
+
+    @Override
+    public ProblemSubmitVO doQuestionRun(ProblemRunRequest runRequest, User loginUser) {
+        // 1. 准备参数
+        String code = runRequest.getCode();
+        String language = runRequest.getLanguage();
+        String input = runRequest.getInput();
+
+        if (StringUtils.isAnyBlank(code, language)) {
+            throw new RuntimeException("参数为空");
+        }
+
+        // 2. 调用沙箱 (DockerCodeSandbox)
+        CodeSandbox codeSandbox = dockerCodeSandbox;
+
+        List<String> inputList = new ArrayList<>();
+        // 处理输入：如果没输入，也得传个空列表进去跑
+        if (input != null) {
+            inputList.add(input);
+        }
+
+        ExecuteCodeRequest executeRequest = ExecuteCodeRequest.builder()
+                .code(code)
+                .language(language)
+                .inputList(inputList)
+                .build();
+
+        ExecuteCodeResponse executeResponse = codeSandbox.executeCode(executeRequest);
+
+        // 3. 封装返回结果
+        ProblemSubmitVO vo = new ProblemSubmitVO();
+        vo.setCode(code);
+        vo.setLanguage(language);
+        vo.setStatus(executeResponse.getStatus()); // 1-成功 2-失败
+
+        JudgeInfo judgeInfo = new JudgeInfo();
+        // 如果有输出，取第一个；如果没有，取 message (比如编译错误信息)
+        if (CollUtil.isNotEmpty(executeResponse.getOutputList())) {
+            judgeInfo.setMessage(executeResponse.getOutputList().get(0));
+        } else {
+            judgeInfo.setMessage(executeResponse.getMessage());
+        }
+
+        // 填充时间内存
+        if (executeResponse.getJudgeInfo() != null) {
+            judgeInfo.setTime(executeResponse.getJudgeInfo().getTime());
+            judgeInfo.setMemory(executeResponse.getJudgeInfo().getMemory());
+        }
+
+        vo.setJudgeInfo(judgeInfo); // 注意这里你的 VO 里 judgeInfo 是对象还是字符串，如果是字符串记得转一下
+
+        return vo;
     }
 }
