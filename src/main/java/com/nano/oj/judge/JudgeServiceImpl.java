@@ -4,6 +4,7 @@ import cn.hutool.json.JSONUtil;
 import com.nano.oj.common.ErrorCode;
 import com.nano.oj.exception.BusinessException;
 import com.nano.oj.judge.codesandbox.CodeSandbox;
+import com.nano.oj.judge.codesandbox.impl.DockerCodeSandbox;
 import com.nano.oj.judge.codesandbox.impl.ExampleCodeSandbox;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeRequest;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeResponse;
@@ -27,6 +28,10 @@ public class JudgeServiceImpl implements JudgeService {
 
     @Resource
     private ProblemService problemService;
+
+    // ✨ 注入 Docker 实现
+    @Resource
+    private DockerCodeSandbox dockerCodeSandbox;
 
     @Override
     public QuestionSubmit doJudge(long questionSubmitId) {
@@ -62,8 +67,8 @@ public class JudgeServiceImpl implements JudgeService {
         List<JudgeCase> judgeCaseList = JSONUtil.toList(judgeCaseStr, JudgeCase.class);
         List<String> inputList = judgeCaseList.stream().map(JudgeCase::getInput).collect(Collectors.toList());
 
-        // 实例化沙箱 (这里暂时硬编码，后面可以用工厂模式)
-        CodeSandbox codeSandbox = new ExampleCodeSandbox();
+        // 使用注入的 Docker 沙箱
+        CodeSandbox codeSandbox = dockerCodeSandbox;
 
         ExecuteCodeRequest executeCodeRequest = ExecuteCodeRequest.builder()
                 .code(questionSubmit.getCode())

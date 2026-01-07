@@ -1,13 +1,15 @@
 package com.nano.oj.controller;
 
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
 import com.nano.oj.common.BaseResponse;
-import com.nano.oj.model.dto.problem.DeleteRequest;
-import com.nano.oj.model.dto.problem.ProblemAddRequest;
-import com.nano.oj.model.dto.problem.ProblemUpdateRequest;
+import com.nano.oj.common.ResultUtils;
+import com.nano.oj.model.dto.problem.*;
 import com.nano.oj.model.entity.Problem;
 import com.nano.oj.model.entity.User;
+import com.nano.oj.model.vo.QuestionVO;
 import com.nano.oj.service.ProblemService;
 import com.nano.oj.service.UserService;
 import jakarta.annotation.Resource;
@@ -15,9 +17,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.nano.oj.model.dto.problem.ProblemQueryRequest;
 import org.apache.commons.lang3.StringUtils; // 用来判断字符串是否为空
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -117,7 +119,8 @@ public class ProblemController {
     }
 
     /**
-     * 根据 id 获取题目
+     * 1. 获取题目详情（管理员/创建者用，返回完整 Entity）
+     * 对应前端的 "修改题目" 页面
      */
     @GetMapping("/get")
     public BaseResponse<Problem> getProblemById(long id, HttpServletRequest request) {
@@ -128,7 +131,50 @@ public class ProblemController {
         if (problem == null) {
             throw new RuntimeException("题目不存在");
         }
-        return new BaseResponse<>(0, problem, "获取成功");
+
+        // 权限校验：只有管理员或者作者才能看完整数据
+        User loginUser = userService.getLoginUser(request);
+        if (!problem.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
+            throw new RuntimeException("无权访问完整数据");
+        }
+
+        return ResultUtils.success(problem);
+    }
+
+    /**
+     * 2. 获取题目详情（做题者用，返回脱敏 VO）
+     * 对应前端的 "做题" 页面
+     */
+    @GetMapping("/get/vo")
+    public BaseResponse<QuestionVO> getProblemVOById(long id, HttpServletRequest request) {
+        if (id <= 0) {
+            throw new RuntimeException("参数错误");
+        }
+        Problem problem = problemService.getById(id);
+        if (problem == null) {
+            throw new RuntimeException("题目不存在");
+        }
+
+        // 转成 VO
+        QuestionVO questionVO = QuestionVO.objToVo(problem);
+
+        // 核心脱敏逻辑
+        // 1. 处理测试用例：只保留第一个作为示例
+        String judgeCaseStr = problem.getJudgeCase();
+        if (judgeCaseStr != null) {
+            List<JudgeCase> judgeCaseList = JSONUtil.toList(judgeCaseStr, JudgeCase.class);
+            if (CollUtil.isNotEmpty(judgeCaseList)) {
+                // 只取第 0 个
+                List<JudgeCase> oneJudgeCase = Collections.singletonList(judgeCaseList.get(0));
+                // 重新赋值给 VO 的 judgeCase 字段 (注意 VO 里是 Object 或 List 类型，看你的定义)
+                questionVO.setJudgeCase(oneJudgeCase);
+            }
+        }
+
+        // 2. 处理答案：直接置空，防止抓包偷看答案
+        questionVO.setAnswer(null);
+
+        return ResultUtils.success(questionVO);
     }
 
     /**
