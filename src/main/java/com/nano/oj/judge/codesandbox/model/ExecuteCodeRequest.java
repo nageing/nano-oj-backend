@@ -26,4 +26,16 @@ public class ExecuteCodeRequest {
      * 语言
      */
     private String language;
+
+    /**
+     * 题目限制的时间（单位：毫秒）
+     * 用于沙箱快速终止死循环程序
+     */
+    private Long timeLimit;
+
+    /**
+     * 题目限制的内存（字节 Byte）
+     * ✨✨✨ 新增：用于直接限制容器大小
+     */
+    private Long memoryLimit;
 }

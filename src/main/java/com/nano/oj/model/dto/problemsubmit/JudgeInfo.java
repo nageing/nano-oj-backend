@@ -14,6 +14,11 @@ public class JudgeInfo {
     private String message;
 
     /**
+     * 错误详情 (例如: 具体的编译报错信息、运行时堆栈信息)
+     */
+    private String detail;
+
+    /**
      * 消耗内存 (KB)
      */
     private Long memory;

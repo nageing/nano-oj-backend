@@ -11,7 +11,6 @@ spring:
   # 数据库连接配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 这里的 nano_oj 要和你之前建库的名字一致
     # serverTimezone=Asia/Shanghai 很重要，防止时间差8小时
     url: jdbc:mysql://localhost:3306/nano_oj?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
@@ -25,7 +24,7 @@ spring:
 # MyBatis Plus 配置
 mybatis-plus:
   configuration:
-    # 开启 SQL 日志打印 (非常重要，开发时能在控制台看到执行了什么 SQL)
+    # 开启 SQL 日志打印
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
     # 驼峰命名自动转换 (比如 user_name -> userName)
     map-underscore-to-camel-case: true
