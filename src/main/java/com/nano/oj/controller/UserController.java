@@ -7,6 +7,7 @@ import com.nano.oj.exception.BusinessException;
 import com.nano.oj.model.dto.user.UserLoginRequest;
 import com.nano.oj.model.dto.user.UserRegisterRequest;
 import com.nano.oj.model.dto.user.UserUpdateMyRequest;
+import com.nano.oj.model.dto.user.UserUpdatePasswordRequest;
 import com.nano.oj.model.entity.User;
 import com.nano.oj.model.vo.LoginUserVO;
 import com.nano.oj.service.UserService;
@@ -123,5 +124,18 @@ public class UserController {
         }
 
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 修改密码
+     */
+    @PostMapping("/update/password")
+    public BaseResponse<Boolean> updatePassword(@RequestBody UserUpdatePasswordRequest updatePasswordRequest,
+                                                HttpServletRequest request) {
+        if (updatePasswordRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        boolean result = userService.updatePassword(updatePasswordRequest, request);
+        return ResultUtils.success(result);
     }
 }

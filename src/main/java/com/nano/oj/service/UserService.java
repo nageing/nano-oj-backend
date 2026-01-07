@@ -1,6 +1,7 @@
 package com.nano.oj.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.nano.oj.model.dto.user.UserUpdatePasswordRequest;
 import com.nano.oj.model.entity.User;
 import com.nano.oj.model.vo.LoginUserVO;
 import jakarta.servlet.http.HttpServletRequest;
@@ -59,4 +60,9 @@ public interface UserService extends IService<User> {
      * @param user 用户信息
      */
     LoginUserVO getLoginUserVO(User user);
+
+    /**
+     * 修改密码
+     */
+    boolean updatePassword(UserUpdatePasswordRequest updatePasswordRequest, HttpServletRequest request);
 }

@@ -2,7 +2,10 @@ package com.nano.oj.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.nano.oj.common.ErrorCode;
+import com.nano.oj.exception.BusinessException;
 import com.nano.oj.mapper.UserMapper;
+import com.nano.oj.model.dto.user.UserUpdatePasswordRequest;
 import com.nano.oj.model.entity.User;
 import com.nano.oj.model.vo.LoginUserVO;
 import com.nano.oj.service.UserService;
@@ -142,6 +145,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     /**
      * 是否为管理员
+     * @param user 用户信息
+     * @return
      */
     @Override
     public boolean isAdmin(User user) {
@@ -150,6 +155,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     /**
      * 获取脱敏后的登录用户信息
+     * @param user 用户信息
+     * @return
      */
     @Override
     public LoginUserVO getLoginUserVO(User user) {
@@ -160,5 +167,43 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 自动把 User 的属性复制给 LoginUserVO (名字一样的字段)
         BeanUtils.copyProperties(user, loginUserVO);
         return loginUserVO;
+    }
+
+    /**
+     * 修改密码
+     * @param updatePasswordRequest
+     * @param request
+     * @return
+     */
+    @Override
+    public boolean updatePassword(UserUpdatePasswordRequest updatePasswordRequest, HttpServletRequest request) {
+        // 1. 校验参数
+        String oldPassword = updatePasswordRequest.getOldPassword();
+        String newPassword = updatePasswordRequest.getNewPassword();
+        String checkPassword = updatePasswordRequest.getCheckPassword();
+
+        if (StringUtils.isAnyBlank(oldPassword, newPassword, checkPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数不能为空");
+        }
+        if (newPassword.length() < 8) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "新密码长度不能少于8位");
+        }
+        if (!newPassword.equals(checkPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次新密码输入不一致");
+        }
+
+        // 2. 获取当前登录用户
+        User loginUser = getLoginUser(request);
+        // 为了安全，重新查一次数据库获取最新密码
+        User user = this.getById(loginUser.getId());
+
+        // 3. 校验旧密码
+        if (!user.getUserPassword().equals(oldPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "旧密码错误");
+        }
+
+        // 4. 更新密码
+        user.setUserPassword(newPassword);
+        return this.updateById(user);
     }
 }

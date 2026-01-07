@@ -4,8 +4,6 @@ import cn.hutool.json.JSONUtil;
 import com.nano.oj.common.ErrorCode;
 import com.nano.oj.exception.BusinessException;
 import com.nano.oj.judge.codesandbox.CodeSandbox;
-import com.nano.oj.judge.codesandbox.impl.DockerCodeSandbox;
-import com.nano.oj.judge.codesandbox.impl.ExampleCodeSandbox;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeRequest;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeResponse;
 import com.nano.oj.model.dto.problem.JudgeCase;
@@ -29,9 +27,8 @@ public class JudgeServiceImpl implements JudgeService {
     @Resource
     private ProblemService problemService;
 
-    // ✨ 注入 Docker 实现
     @Resource
-    private DockerCodeSandbox dockerCodeSandbox;
+    private CodeSandbox dockerCodeSandbox;
 
     @Override
     public QuestionSubmit doJudge(long questionSubmitId) {
@@ -52,7 +49,7 @@ public class JudgeServiceImpl implements JudgeService {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "题目正在判题中");
         }
 
-        // 3. 更改状态为“判题中”，防止重复执行
+        // 3. 更改状态为“判题中”
         QuestionSubmit updateQuestionSubmit = new QuestionSubmit();
         updateQuestionSubmit.setId(questionSubmitId);
         updateQuestionSubmit.setStatus(1); // 1-判题中
@@ -62,13 +59,10 @@ public class JudgeServiceImpl implements JudgeService {
         }
 
         // 4. 调用沙箱
-        // 获取输入用例
         String judgeCaseStr = problem.getJudgeCase();
         List<JudgeCase> judgeCaseList = JSONUtil.toList(judgeCaseStr, JudgeCase.class);
         List<String> inputList = judgeCaseList.stream().map(JudgeCase::getInput).collect(Collectors.toList());
-
-        // 使用注入的 Docker 沙箱
-        CodeSandbox codeSandbox = dockerCodeSandbox;
+        List<String> expectedOutputList = judgeCaseList.stream().map(JudgeCase::getOutput).collect(Collectors.toList());
 
         ExecuteCodeRequest executeCodeRequest = ExecuteCodeRequest.builder()
                 .code(questionSubmit.getCode())
@@ -76,39 +70,88 @@ public class JudgeServiceImpl implements JudgeService {
                 .inputList(inputList)
                 .build();
 
-        ExecuteCodeResponse executeCodeResponse = codeSandbox.executeCode(executeCodeRequest);
+        ExecuteCodeResponse executeCodeResponse = dockerCodeSandbox.executeCode(executeCodeRequest);
 
-        // 5. 根据沙箱的执行结果，设置题目的判题状态和信息
-        // 这里只是简单的逻辑：如果沙箱输出的数量和预期不一样，那就是错的
+        // 5. 根据沙箱结果处理判题逻辑
         List<String> outputList = executeCodeResponse.getOutputList();
-        // 预期输出
-        List<String> expectedOutputList = judgeCaseList.stream().map(JudgeCase::getOutput).collect(Collectors.toList());
 
         JudgeInfo judgeInfo = new JudgeInfo();
-        // 默认设置为 Accept，下面去“找茬”
-        judgeInfo.setMessage("Accepted");
         judgeInfo.setMemory(executeCodeResponse.getJudgeInfo().getMemory());
         judgeInfo.setTime(executeCodeResponse.getJudgeInfo().getTime());
 
-        // 开始比对
-        if (outputList.size() != inputList.size()) {
-            judgeInfo.setMessage("Wrong Answer"); // 数量都不对，肯定错了
+        // 如果沙箱执行本身失败（比如编译错误，或者容器挂了）
+        if (executeCodeResponse.getStatus() != 1) { // 假设 1 表示运行正常结束
+            judgeInfo.setMessage(executeCodeResponse.getMessage()); // 可能是 "Compile Error" 或 "Runtime Error"
+            updateDatabase(questionSubmitId, 2, judgeInfo); // 2-流程结束
+            return questionSubmitService.getById(questionSubmitId);
+        }
+
+        // ✨✨✨ 核心修改：使用 Codeforces 标准进行比对 ✨✨✨
+        judgeInfo.setMessage("Accepted"); // 先假设是对的
+
+        if (outputList == null || outputList.size() != inputList.size()) {
+            judgeInfo.setMessage("Wrong Answer");
+            // 可以记录下详情: "输出数量不一致"
         } else {
             for (int i = 0; i < judgeCaseList.size(); i++) {
-                if (!outputList.get(i).equals(expectedOutputList.get(i))) {
+                String expected = expectedOutputList.get(i);
+                String actual = outputList.get(i);
+
+                // 使用去空格逻辑判断
+                if (!checkOutput(expected, actual)) {
                     judgeInfo.setMessage("Wrong Answer");
-                    break; // 只要有一个不对，就直接判错
+                    // 记录一下哪个用例错了，方便调试 (可选)
+                    // System.out.println("Diff at case " + i + ": expect [" + expected + "], actual [" + actual + "]");
+                    break;
                 }
             }
         }
 
-        // 6. 修改数据库中的判题结果
-        updateQuestionSubmit = new QuestionSubmit();
-        updateQuestionSubmit.setId(questionSubmitId);
-        updateQuestionSubmit.setStatus(2); // 2-成功（指判题流程结束，不是指题目做对了）
-        updateQuestionSubmit.setJudgeInfo(JSONUtil.toJsonStr(judgeInfo));
-        questionSubmitService.updateById(updateQuestionSubmit);
+        // 6. 修改数据库状态
+        updateDatabase(questionSubmitId, 2, judgeInfo);
 
         return questionSubmitService.getById(questionSubmitId);
+    }
+
+    /**
+     * 辅助方法：更新数据库
+     */
+    private void updateDatabase(Long submitId, Integer status, JudgeInfo judgeInfo) {
+        QuestionSubmit updateQuestionSubmit = new QuestionSubmit();
+        updateQuestionSubmit.setId(submitId);
+        updateQuestionSubmit.setStatus(status);
+        updateQuestionSubmit.setJudgeInfo(JSONUtil.toJsonStr(judgeInfo));
+        questionSubmitService.updateById(updateQuestionSubmit);
+    }
+
+    /**
+     * ✨✨✨ 辅助方法：Codeforces 风格比对 ✨✨✨
+     * 忽略行末空格、文末换行，将连续空白视为一个分隔符
+     */
+    private boolean checkOutput(String expected, String actual) {
+        if (expected == null) expected = "";
+        if (actual == null) actual = "";
+
+        // 1. 去除首尾空白
+        expected = expected.trim();
+        actual = actual.trim();
+
+        // 2. 按“空白字符”切割
+        // "\\s+" 正则匹配：空格、Tab、换行符等任意连续空白
+        String[] expectedTokens = expected.split("\\s+");
+        String[] actualTokens = actual.split("\\s+");
+
+        // 3. 比较 Token 数量
+        if (expectedTokens.length != actualTokens.length) {
+            return false;
+        }
+
+        // 4. 逐个 Token 比对
+        for (int i = 0; i < expectedTokens.length; i++) {
+            if (!expectedTokens[i].equals(actualTokens[i])) {
+                return false;
+            }
+        }
+        return true;
     }
 }
