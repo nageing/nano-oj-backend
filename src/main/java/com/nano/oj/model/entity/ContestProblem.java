@@ -38,7 +38,7 @@ public class ContestProblem implements Serializable {
 
     private Date createTime;
     private Date updateTime;
-
+    private Integer score;
     @TableLogic
     private Integer isDelete;
 

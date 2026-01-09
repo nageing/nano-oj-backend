@@ -41,3 +41,14 @@ aliyun:
     access-key-id: ${ALIYUN_ACCESS_KEY_ID}
     access-key-secret: ${ALIYUN_ACCESS_KEY_SECRET}
     bucket-name: ${ALIYUN_BUCKET_NAME:nano-oj}
+
+
+rabbitmq:
+  host: localhost
+  port: 5672
+  username: guest
+  password: guest
+  # 开启手动确认消息 (保证消息不丢失)
+  listener:
+    simple:
+      acknowledge-mode: manual

@@ -10,10 +10,7 @@ import com.nano.oj.common.ResultUtils;
 import com.nano.oj.constant.UserConstant;
 import com.nano.oj.exception.BusinessException;
 import com.nano.oj.mapper.ContestApplyMapper;
-import com.nano.oj.model.dto.contest.ContestAddRequest;
-import com.nano.oj.model.dto.contest.ContestApplyRequest;
-import com.nano.oj.model.dto.contest.ContestQueryRequest;
-import com.nano.oj.model.dto.contest.ContestUpdateRequest;
+import com.nano.oj.model.dto.contest.*;
 import com.nano.oj.model.dto.problem.DeleteRequest;
 import com.nano.oj.model.entity.*;
 import com.nano.oj.model.vo.ContestAdminVO;
@@ -283,5 +280,24 @@ public class ContestController {
         Long count = contestApplyMapper.selectCount(queryWrapper);
 
         return ResultUtils.success(count > 0);
+    }
+
+    /**
+     * 获取比赛排行榜 (分页)
+     * 地址：POST /contest/rank/list/page
+     */
+    @PostMapping("/rank/list/page")
+    public BaseResponse<Page<ContestRanking>> getContestRank(@RequestBody ContestRankQueryRequest contestRankQueryRequest) {
+        if (contestRankQueryRequest == null || contestRankQueryRequest.getContestId() == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        long current = contestRankQueryRequest.getCurrent();
+        long size = contestRankQueryRequest.getPageSize();
+        Long contestId = contestRankQueryRequest.getContestId();
+
+        // 调用 Service
+        Page<ContestRanking> page = contestService.getContestRank(contestId, current, size);
+        return ResultUtils.success(page);
     }
 }

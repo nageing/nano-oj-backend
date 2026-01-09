@@ -11,4 +11,5 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ContestProblemServiceImpl extends ServiceImpl<ContestProblemMapper, ContestProblem> implements ContestProblemService {
+
 }

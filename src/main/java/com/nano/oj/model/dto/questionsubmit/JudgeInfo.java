@@ -27,4 +27,9 @@ public class JudgeInfo {
      * 消耗时间 (ms)
      */
     private Long time;
+
+    /**
+     * 分数
+     */
+    private Integer score;
 }

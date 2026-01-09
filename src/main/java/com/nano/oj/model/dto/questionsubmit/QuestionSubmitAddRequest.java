@@ -24,5 +24,10 @@ public class QuestionSubmitAddRequest implements Serializable {
      */
     private Long problemId;
 
+    /**
+     * 比赛 ID (非必填，仅比赛提交时有值)
+     */
+    private Long contestId;
+
     private static final long serialVersionUID = 1L;
 }

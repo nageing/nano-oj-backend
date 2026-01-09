@@ -82,7 +82,7 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         questionSubmit.setQuestionId(problemId);
         questionSubmit.setCode(questionSubmitAddRequest.getCode());
         questionSubmit.setLanguage(language);
-
+        questionSubmit.setContestId(questionSubmitAddRequest.getContestId());
         // 设置初始状态：0-待判题
         questionSubmit.setStatus(0);
         questionSubmit.setJudgeInfo("{}");

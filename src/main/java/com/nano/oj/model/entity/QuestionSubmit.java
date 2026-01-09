@@ -66,6 +66,8 @@ public class QuestionSubmit implements Serializable {
     @TableLogic
     private Integer isDelete;
 
+    private Integer score;
+
     @TableField(exist = false)
     private static final long serialVersionUID = 1L;
 }

@@ -1,9 +1,12 @@
 package com.nano.oj.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.nano.oj.common.BaseResponse;
 import com.nano.oj.common.ErrorCode;
+import com.nano.oj.common.ResultUtils;
 import com.nano.oj.exception.BusinessException;
 import com.nano.oj.mapper.ContestApplyMapper;
 import com.nano.oj.mapper.ContestMapper;
@@ -17,6 +20,7 @@ import com.nano.oj.model.vo.ProblemVO;
 import com.nano.oj.service.ContestService;
 import com.nano.oj.service.ProblemService;
 import com.nano.oj.service.UserService;
+import com.nano.oj.service.ContestRankingService;
 import jakarta.annotation.Resource;
 import cn.hutool.core.collection.CollUtil;
 
@@ -44,8 +48,12 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
     // 2. 注入提交表的 Mapper
     @Resource
     private QuestionSubmitMapper questionSubmitMapper;
+
     @Resource
-    private ContestApplyMapper contestApplyMapper; // ✅ 确保注入，否则报空指针
+    private ContestApplyMapper contestApplyMapper;
+
+    @Resource
+    private ContestRankingService contestRankingService;
 
     /**
      * 创建比赛
@@ -215,22 +223,21 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
         contestVO.setHasJoined(hasJoined);
         // ================== ✅ 新增：强制矫正比赛状态 ==================
         // 数据库里的 status 可能不准（比如定时任务没跑），所以我们按时间现场算一遍
-        long now1 = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
         long start = contest.getStartTime().getTime();
         long end = contest.getEndTime().getTime();
 
-        if (now1 < start) {
+        if (now < start) {
             contestVO.setStatus(0); // 未开始
-        } else if (now1 > end) {
+        } else if (now > end) {
             contestVO.setStatus(2); // 已结束
         } else {
             contestVO.setStatus(1); // 进行中
         }
         // 2. 权限判断
-        Date now2 = new Date();
-        boolean isAdmin = loginUser != null && (userService.isAdmin(loginUser) || contest.getUserId().equals(loginUser.getId()));
-        boolean isEnded = contest.getStatus() == 2 || now2.after(contest.getEndTime());
-        boolean canSeeProblems = isAdmin || isEnded || (hasJoined && contest.getStatus() != 0);
+        boolean isAdmin = loginUser != null && (userService.isAdmin(loginUser) || contestVO.getUserId().equals(loginUser.getId()));
+        boolean isEnded = contestVO.getStatus() == 2;
+        boolean canSeeProblems = isAdmin || isEnded || (hasJoined && contestVO.getStatus() != 0);
 
         if (canSeeProblems) {
             // A. 查关联表 (决定最终顺序)
@@ -278,7 +285,7 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
                         // 1. 查 AC
                         LambdaQueryWrapper<QuestionSubmit> successQuery = baseQuery.clone();
                         successQuery.eq(QuestionSubmit::getStatus, 2);
-                        successQuery.like(QuestionSubmit::getJudgeInfo, "\"AC\"");
+                        successQuery.like(QuestionSubmit::getJudgeInfo, "\"Accepted\"");
 
                         if (questionSubmitMapper.selectCount(successQuery) > 0) {
 
@@ -298,7 +305,7 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
             }
         }
 
-        System.out.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n####################################" + contestVO.getStatus() + "#################################\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+       // System.out.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n####################################" + contestVO.getStatus() + "#################################\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
 
         return contestVO;
     }
@@ -352,5 +359,36 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
 
         // 2. 删除比赛本身
         return this.removeById(id);
+    }
+
+
+    @Override
+    public Page<ContestRanking> getContestRank(Long contestId, long current, long size) {
+        Contest contest = this.getById(contestId);
+
+        // 构建查询条件
+        QueryWrapper<ContestRanking> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("contest_id", contestId);
+
+        // 根据赛制决定排序规则 (利用数据库索引)
+        if (contest.getType() == 0) {
+            // ACM: 解题数降序，罚时升序
+            queryWrapper.orderByDesc("solved").orderByAsc("total_time");
+        } else {
+            // OI: 总分降序
+            queryWrapper.orderByDesc("total_score");
+        }
+
+        // 这行代码现在应该能正常编译通过了
+        Page<ContestRanking> page = contestRankingService.page(new Page<>(current, size), queryWrapper);
+
+        // 填充排名序号 (current - 1) * size + index + 1
+        long startRank = (current - 1) * size + 1;
+        List<ContestRanking> records = page.getRecords();
+        for (int i = 0; i < records.size(); i++) {
+            records.get(i).setRank((int) ((current - 1) * size + i + 1));
+        }
+
+        return page;
     }
 }

@@ -2,10 +2,12 @@ package com.nano.oj.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.nano.oj.common.BaseResponse;
 import com.nano.oj.model.dto.contest.ContestAddRequest;
 import com.nano.oj.model.dto.contest.ContestApplyRequest;
 import com.nano.oj.model.dto.contest.ContestQueryRequest;
 import com.nano.oj.model.entity.Contest;
+import com.nano.oj.model.entity.ContestRanking;
 import com.nano.oj.model.entity.User;
 import com.nano.oj.model.vo.ContestVO;
 
@@ -48,4 +50,5 @@ public interface ContestService extends IService<Contest> {
      */
     void cancelApply(ContestApplyRequest contestApplyRequest, User loginUser);
 
+    Page<ContestRanking> getContestRank(Long contestId, long current, long size);
 }
