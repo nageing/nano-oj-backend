@@ -8,7 +8,7 @@ import com.nano.oj.judge.codesandbox.model.ExecuteCodeRequest;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeResponse;
 import com.nano.oj.model.dto.problem.JudgeCase;
 import com.nano.oj.model.dto.problem.JudgeConfig;
-import com.nano.oj.model.dto.problemsubmit.JudgeInfo;
+import com.nano.oj.model.dto.questionsubmit.JudgeInfo;
 import com.nano.oj.model.entity.Problem;
 import com.nano.oj.model.entity.QuestionSubmit;
 import com.nano.oj.service.ProblemService;

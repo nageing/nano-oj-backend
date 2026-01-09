@@ -1,7 +1,6 @@
 package com.nano.oj.judge;
 
 import com.nano.oj.model.entity.QuestionSubmit;
-import com.nano.oj.model.vo.ProblemSubmitVO;
 
 /**
  * 判题服务

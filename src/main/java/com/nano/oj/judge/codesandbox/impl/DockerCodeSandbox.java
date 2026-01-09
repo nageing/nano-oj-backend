@@ -12,13 +12,12 @@ import com.github.dockerjava.core.command.LogContainerResultCallback;
 import com.nano.oj.judge.codesandbox.CodeSandbox;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeRequest;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeResponse;
-import com.nano.oj.model.dto.problemsubmit.JudgeInfo;
+import com.nano.oj.model.dto.questionsubmit.JudgeInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 import java.io.File;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;

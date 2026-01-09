@@ -29,11 +29,6 @@ public class Problem implements Serializable {
     private String content;
 
     /**
-     * 标签列表（json数组，例如 ["栈","困难"]）
-     */
-    private String tags;
-
-    /**
      * 题目答案
      */
     private String answer;
@@ -57,6 +52,11 @@ public class Problem implements Serializable {
      * 判题配置（json对象，包含时间限制、内存限制）
      */
     private String judgeConfig;
+
+    /**
+     * 可见性（0-公开，1-私有/比赛专用）
+     */
+    private Integer visible;
 
     /**
      * 点赞数

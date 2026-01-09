@@ -7,7 +7,7 @@ import com.nano.oj.exception.BusinessException;
 import com.nano.oj.mapper.UserMapper;
 import com.nano.oj.model.dto.user.UserUpdatePasswordRequest;
 import com.nano.oj.model.entity.User;
-import com.nano.oj.model.vo.LoginUserVO;
+import com.nano.oj.model.vo.UserVO;
 import com.nano.oj.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.StringUtils; // 如果爆红，看下面的提示
@@ -159,14 +159,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      * @return
      */
     @Override
-    public LoginUserVO getLoginUserVO(User user) {
+    public UserVO getUserVO(User user) {
         if (user == null) {
             return null;
         }
-        LoginUserVO loginUserVO = new LoginUserVO();
-        // 自动把 User 的属性复制给 LoginUserVO (名字一样的字段)
-        BeanUtils.copyProperties(user, loginUserVO);
-        return loginUserVO;
+        UserVO UserVO = new UserVO();
+        // 自动把 User 的属性复制给 UserVO (名字一样的字段)
+        BeanUtils.copyProperties(user, UserVO);
+        return UserVO;
     }
 
     /**

@@ -43,5 +43,10 @@ public class ProblemAddRequest implements Serializable {
      */
     private Object judgeConfig;
 
+    /**
+     * 可见性
+     */
+    private Integer visible;
+
     private static final long serialVersionUID = 1L;
 }

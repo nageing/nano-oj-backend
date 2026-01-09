@@ -2,22 +2,20 @@ package com.nano.oj.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.nano.oj.common.ErrorCode;
-import com.nano.oj.exception.BusinessException;
 import com.nano.oj.judge.JudgeService;
 import com.nano.oj.judge.codesandbox.CodeSandbox;
 import com.nano.oj.judge.codesandbox.impl.DockerCodeSandbox;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeRequest;
 import com.nano.oj.judge.codesandbox.model.ExecuteCodeResponse;
 import com.nano.oj.mapper.QuestionSubmitMapper;
-import com.nano.oj.model.dto.problemsubmit.JudgeInfo;
-import com.nano.oj.model.dto.problemsubmit.ProblemRunRequest;
-import com.nano.oj.model.dto.problemsubmit.ProblemSubmitAddRequest;
+import com.nano.oj.model.dto.questionsubmit.JudgeInfo;
+import com.nano.oj.model.dto.questionsubmit.QuestionRunRequest;
+import com.nano.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
 import com.nano.oj.model.entity.Problem;
 import com.nano.oj.model.entity.QuestionSubmit;
 import com.nano.oj.model.entity.User;
-import com.nano.oj.model.vo.ProblemSubmitVO;
-import com.nano.oj.model.vo.QuestionVO;
+import com.nano.oj.model.vo.QuestionSubmitVO;
+import com.nano.oj.model.vo.ProblemVO;
 import com.nano.oj.model.vo.UserVO;
 import com.nano.oj.service.ProblemService;
 import com.nano.oj.service.QuestionSubmitService;
@@ -58,19 +56,19 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
     /**
      * 提交代码
      *
-     * @param problemSubmitAddRequest 提交信息
+     * @param questionSubmitAddRequest 提交信息
      * @param loginUser               当前登录用户
      * @return 提交记录 ID
      */
     @Override
-    public long doQuestionSubmit(ProblemSubmitAddRequest problemSubmitAddRequest, User loginUser) {
+    public long doQuestionSubmit(QuestionSubmitAddRequest questionSubmitAddRequest, User loginUser) {
         // 1. 校验编程语言
-        String language = problemSubmitAddRequest.getLanguage();
+        String language = questionSubmitAddRequest.getLanguage();
         if (!"java".equals(language) && !"cpp".equals(language) && !"python".equals(language) && !"go".equals(language)) {
             throw new RuntimeException("编程语言错误");
         }
 
-        long problemId = problemSubmitAddRequest.getProblemId();
+        long problemId = questionSubmitAddRequest.getProblemId();
 
         // 2. 判断题目是否存在
         Problem problem = problemService.getById(problemId);
@@ -82,7 +80,7 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         QuestionSubmit questionSubmit = new QuestionSubmit();
         questionSubmit.setUserId(loginUser.getId());
         questionSubmit.setQuestionId(problemId);
-        questionSubmit.setCode(problemSubmitAddRequest.getCode());
+        questionSubmit.setCode(questionSubmitAddRequest.getCode());
         questionSubmit.setLanguage(language);
 
         // 设置初始状态：0-待判题
@@ -112,16 +110,16 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
      * @return 脱敏后的 VO
      */
     @Override
-    public ProblemSubmitVO getProblemSubmitVO(QuestionSubmit questionSubmit, User loginUser) {
+    public QuestionSubmitVO getProblemSubmitVO(QuestionSubmit questionSubmit, User loginUser) {
         // 使用 ProblemSubmitVO.objToVo 自动转换 judgeInfo (String -> Object)
-        ProblemSubmitVO problemSubmitVO = ProblemSubmitVO.objToVo(questionSubmit);
+        QuestionSubmitVO questionSubmitVO = QuestionSubmitVO.objToVo(questionSubmit);
 
         // 脱敏：如果不是本人，也不是管理员，则不返回代码
         long userId = loginUser.getId();
         if (userId != questionSubmit.getUserId() && !userService.isAdmin(loginUser)) {
-            problemSubmitVO.setCode(null);
+            questionSubmitVO.setCode(null);
         }
-        return problemSubmitVO;
+        return questionSubmitVO;
     }
 
     /**
@@ -132,21 +130,21 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
      * @return 分页 VO
      */
     @Override
-    public Page<ProblemSubmitVO> getProblemSubmitVOPage(Page<QuestionSubmit> questionSubmitPage, User loginUser) {
+    public Page<QuestionSubmitVO> getProblemSubmitVOPage(Page<QuestionSubmit> questionSubmitPage, User loginUser) {
         List<QuestionSubmit> questionSubmitList = questionSubmitPage.getRecords();
-        Page<ProblemSubmitVO> problemSubmitVOPage = new Page<>(questionSubmitPage.getCurrent(), questionSubmitPage.getSize(), questionSubmitPage.getTotal());
+        Page<QuestionSubmitVO> problemSubmitVOPage = new Page<>(questionSubmitPage.getCurrent(), questionSubmitPage.getSize(), questionSubmitPage.getTotal());
 
         if (CollUtil.isEmpty(questionSubmitList)) {
             return problemSubmitVOPage;
         }
 
         // 1. 批量转换 (先处理基本信息和脱敏)
-        List<ProblemSubmitVO> problemSubmitVOList = questionSubmitList.stream()
+        List<QuestionSubmitVO> questionSubmitVOList = questionSubmitList.stream()
                 .map(questionSubmit -> getProblemSubmitVO(questionSubmit, loginUser))
                 .collect(Collectors.toList());
 
         // 2. 填充关联信息 (用户信息、题目信息)
-        for (ProblemSubmitVO vo : problemSubmitVOList) {
+        for (QuestionSubmitVO vo : questionSubmitVOList) {
             // A. 填充提交人信息
             Long userId = vo.getUserId();
             User user = userService.getById(userId);
@@ -160,17 +158,17 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
             Long questionId = vo.getQuestionId();
             Problem problem = problemService.getById(questionId);
             if (problem != null) {
-                QuestionVO questionVO = QuestionVO.objToVo(problem);
-                vo.setQuestionVO(questionVO);
+                ProblemVO problemVO = ProblemVO.objToVo(problem);
+                vo.setProblemVO(problemVO);
             }
         }
 
-        problemSubmitVOPage.setRecords(problemSubmitVOList);
+        problemSubmitVOPage.setRecords(questionSubmitVOList);
         return problemSubmitVOPage;
     }
 
     @Override
-    public ProblemSubmitVO doQuestionRun(ProblemRunRequest runRequest, User loginUser) {
+    public QuestionSubmitVO doQuestionRun(QuestionRunRequest runRequest, User loginUser) {
         // 1. 准备参数
         String code = runRequest.getCode();
         String language = runRequest.getLanguage();
@@ -198,7 +196,7 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         ExecuteCodeResponse executeResponse = codeSandbox.executeCode(executeRequest);
 
         // 3. 封装返回结果
-        ProblemSubmitVO vo = new ProblemSubmitVO();
+        QuestionSubmitVO vo = new QuestionSubmitVO();
         vo.setCode(code);
         vo.setLanguage(language);
         vo.setStatus(executeResponse.getStatus()); // 1-成功 2-失败

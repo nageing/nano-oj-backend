@@ -1,7 +1,7 @@
 package com.nano.oj.model.vo;
 
 import cn.hutool.json.JSONUtil;
-import com.nano.oj.model.dto.problemsubmit.JudgeInfo;
+import com.nano.oj.model.dto.questionsubmit.JudgeInfo;
 import com.nano.oj.model.entity.QuestionSubmit;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
@@ -13,7 +13,7 @@ import java.util.Date;
  * 题目提交封装类 (用于返回给前端)
  */
 @Data
-public class ProblemSubmitVO implements Serializable {
+public class QuestionSubmitVO implements Serializable {
     private Long id;
     private String language;
     private String code;
@@ -37,25 +37,25 @@ public class ProblemSubmitVO implements Serializable {
     /**
      * 题目信息
      */
-    private QuestionVO questionVO;
+    private ProblemVO problemVO;
 
     /**
      * 对象转包装类
      */
-    public static ProblemSubmitVO objToVo(QuestionSubmit questionSubmit) {
+    public static QuestionSubmitVO objToVo(QuestionSubmit questionSubmit) {
         if (questionSubmit == null) {
             return null;
         }
-        ProblemSubmitVO problemSubmitVO = new ProblemSubmitVO();
-        BeanUtils.copyProperties(questionSubmit, problemSubmitVO);
+        QuestionSubmitVO questionSubmitVO = new QuestionSubmitVO();
+        BeanUtils.copyProperties(questionSubmit, questionSubmitVO);
 
         // ✨ 重点修改：手动把 String 转成 JudgeInfo 对象
         String judgeInfoStr = questionSubmit.getJudgeInfo();
         if (judgeInfoStr != null) {
-            problemSubmitVO.setJudgeInfo(JSONUtil.toBean(judgeInfoStr, JudgeInfo.class));
+            questionSubmitVO.setJudgeInfo(JSONUtil.toBean(judgeInfoStr, JudgeInfo.class));
         }
 
-        return problemSubmitVO;
+        return questionSubmitVO;
     }
 
     private static final long serialVersionUID = 1L;

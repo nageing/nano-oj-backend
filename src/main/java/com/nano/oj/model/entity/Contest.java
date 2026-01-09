@@ -2,49 +2,57 @@ package com.nano.oj.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-
 import java.io.Serializable;
 import java.util.Date;
 
 /**
- * 题目提交表
- * @TableName question_submit
+ * 比赛实体
+ * @TableName contest
  */
-@TableName(value = "question_submit")
+@TableName(value = "contest")
 @Data
-public class QuestionSubmit implements Serializable {
+public class Contest implements Serializable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
-     * 编程语言
+     * 比赛名称
      */
-    private String language;
+    private String title;
 
     /**
-     * 用户代码
+     * 比赛描述
      */
-    private String code;
+    private String description;
 
     /**
-     * 判题信息（JSON 对象）
+     * 开始时间
      */
-    private String judgeInfo;
+    private Date startTime;
 
     /**
-     * 判题状态（0 - 待判题、1 - 判题中、2 - 成功、3 - 失败）
+     * 结束时间
+     */
+    private Date endTime;
+
+    /**
+     * 比赛状态（0-未开始，1-进行中，2-已结束）
      */
     private Integer status;
 
     /**
-     * 题目 id
-     * ⚠️ 注意：数据库叫 question_id，所以这里叫 questionId
+     * 访问密码（空则为公开）
      */
-    private Long questionId;
+    private String pwd;
 
     /**
-     * 创建人 id
+     * 赛制：0-ACM, 1-OI
+     */
+    private Integer type;
+
+    /**
+     * 创建者id
      */
     private Long userId;
 
@@ -57,11 +65,6 @@ public class QuestionSubmit implements Serializable {
      * 更新时间
      */
     private Date updateTime;
-
-    /**
-     *  所属比赛 id
-     */
-    private Long contestId;
 
     @TableLogic
     private Integer isDelete;

@@ -1,4 +1,4 @@
-package com.nano.oj.model.dto.problemsubmit;
+package com.nano.oj.model.dto.questionsubmit;
 
 import com.nano.oj.common.PageRequest;
 import lombok.Data;
@@ -12,7 +12,7 @@ import java.io.Serializable;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class ProblemSubmitQueryRequest extends PageRequest implements Serializable {
+public class QuestionSubmitQueryRequest extends PageRequest implements Serializable {
 
     /**
      * 编程语言

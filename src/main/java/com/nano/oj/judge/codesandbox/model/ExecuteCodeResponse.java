@@ -1,6 +1,6 @@
 package com.nano.oj.judge.codesandbox.model;
 
-import com.nano.oj.model.dto.problemsubmit.JudgeInfo;
+import com.nano.oj.model.dto.questionsubmit.JudgeInfo;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

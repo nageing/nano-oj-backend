@@ -40,6 +40,11 @@ public class ProblemQueryRequest extends PageRequest implements Serializable {
      */
     private Long userId;
 
+    /**
+     * 可见性
+     */
+    private Integer visible;
+
     @Serial
     private static final long serialVersionUID = 1L;
 }

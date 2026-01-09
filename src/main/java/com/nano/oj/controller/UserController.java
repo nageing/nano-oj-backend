@@ -9,7 +9,7 @@ import com.nano.oj.model.dto.user.UserRegisterRequest;
 import com.nano.oj.model.dto.user.UserUpdateMyRequest;
 import com.nano.oj.model.dto.user.UserUpdatePasswordRequest;
 import com.nano.oj.model.entity.User;
-import com.nano.oj.model.vo.LoginUserVO;
+import com.nano.oj.model.vo.UserVO;
 import com.nano.oj.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.StringUtils;
@@ -76,11 +76,11 @@ public class UserController {
      * 获取当前登录用户 (兼容版)
      */
     @GetMapping("/get/login")
-    public BaseResponse<LoginUserVO> getLoginUser(HttpServletRequest request) {
+    public BaseResponse<UserVO> getLoginUser(HttpServletRequest request) {
         // 尝试获取用户，如果没登录，直接返回 null，不要报 500 错误
         try {
             User user = userService.getLoginUser(request);
-            return ResultUtils.success(userService.getLoginUserVO(user));
+            return ResultUtils.success(userService.getUserVO(user));
         } catch (Exception e) {
             // 捕获所有异常（包括未登录异常），返回 null 表示“没人登录”
             return ResultUtils.success(null);

@@ -7,6 +7,7 @@ import lombok.Data;
 import org.springframework.beans.BeanUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -14,7 +15,7 @@ import java.util.List;
  * 题目视图对象
  */
 @Data
-public class QuestionVO implements Serializable {
+public class ProblemVO implements Serializable {
 
     private final static Gson GSON = new Gson();
 
@@ -31,9 +32,9 @@ public class QuestionVO implements Serializable {
     private String content;
 
     /**
-     * 标签列表 (后端是 JSON String，转成 List 给前端)
+     * 标签列表 (修改为对象列表)
      */
-    private List<String> tags;
+    private List<TagVO> tags;
 
     /**
      * 题目答案 (通常不返回给前端，除非是管理员或者已解答)
@@ -90,40 +91,39 @@ public class QuestionVO implements Serializable {
      */
     private UserVO userVO;
 
+
+    private Integer userStatus;
+
+    /**
+     * 可见性
+     */
+    private Integer visible;
     private static final long serialVersionUID = 1L;
 
     /**
      * 包装类转对象
-     * 把 DB 里的 JSON 字符串转成对象
-     *
-     * @param problem
-     * @return
+     * 把 DB 里的 JSON 字符串转成 ProblemVO
      */
-    public static QuestionVO objToVo(Problem problem) {
+    public static ProblemVO objToVo(Problem problem) {
         if (problem == null) {
             return null;
         }
-        QuestionVO questionVO = new QuestionVO();
-        BeanUtils.copyProperties(problem, questionVO);
+        ProblemVO problemVO = new ProblemVO();
+        BeanUtils.copyProperties(problem, problemVO);
 
-        // 处理 tags 字符串 -> List
-        String tagStr = problem.getTags();
-        if (tagStr != null) {
-            questionVO.setTags(GSON.fromJson(tagStr, new TypeToken<List<String>>() {}.getType()));
-        }
 
-        // 处理 judgeConfig 字符串 -> Object
+        // 处理 judgeConfig
         String judgeConfigStr = problem.getJudgeConfig();
         if (judgeConfigStr != null) {
-            questionVO.setJudgeConfig(GSON.fromJson(judgeConfigStr, Object.class));
+            problemVO.setJudgeConfig(GSON.fromJson(judgeConfigStr, Object.class));
         }
 
-        // 处理 judgeCase 字符串 -> Object
+        // 处理 judgeCase
         String judgeCaseStr = problem.getJudgeCase();
         if (judgeCaseStr != null) {
-            questionVO.setJudgeCase(GSON.fromJson(judgeCaseStr, Object.class));
+            problemVO.setJudgeCase(GSON.fromJson(judgeCaseStr, Object.class));
         }
 
-        return questionVO;
+        return problemVO;
     }
 }

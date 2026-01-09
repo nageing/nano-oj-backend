@@ -1,4 +1,4 @@
-package com.nano.oj.model.dto.problemsubmit;
+package com.nano.oj.model.dto.questionsubmit;
 
 import lombok.Data;
 import java.io.Serializable;
@@ -7,7 +7,7 @@ import java.io.Serializable;
  * 创建题目提交请求
  */
 @Data
-public class ProblemSubmitAddRequest implements Serializable {
+public class QuestionSubmitAddRequest implements Serializable {
 
     /**
      * 编程语言

@@ -2,22 +2,24 @@ package com.nano.oj.controller;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
 import com.nano.oj.common.BaseResponse;
+import com.nano.oj.common.ErrorCode;
 import com.nano.oj.common.ResultUtils;
+import com.nano.oj.exception.BusinessException;
 import com.nano.oj.model.dto.problem.*;
 import com.nano.oj.model.entity.Problem;
 import com.nano.oj.model.entity.User;
-import com.nano.oj.model.vo.QuestionVO;
+import com.nano.oj.model.vo.ProblemVO;
 import com.nano.oj.service.ProblemService;
 import com.nano.oj.service.UserService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import org.apache.commons.lang3.StringUtils; // 用来判断字符串是否为空
 
 import java.util.Collections;
 import java.util.List;
@@ -43,26 +45,32 @@ public class ProblemController {
     @PostMapping("/add")
     public BaseResponse<Long> addProblem(@RequestBody ProblemAddRequest problemAddRequest, HttpServletRequest request) {
         if (problemAddRequest == null) {
-            throw new RuntimeException("参数为空");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
 
         User loginUser = userService.getLoginUser(request);
         Problem problem = new Problem();
         BeanUtils.copyProperties(problemAddRequest, problem);
 
-        // ✨ 使用提取出的通用方法，消除重复代码警告
-        this.setJsonValues(problem, problemAddRequest.getTags(), problemAddRequest.getJudgeCase(), problemAddRequest.getJudgeConfig());
+        // 1. 处理 JSON 字段 (judgeCase, judgeConfig)
+        // ⚠️ 注意：这里不再处理 tags，因为 tags 已经不是 problem 表的字段了
+        this.setJsonValues(problem, problemAddRequest.getJudgeCase(), problemAddRequest.getJudgeConfig());
+
+        // 2. 设置可见性
+        if (problemAddRequest.getVisible() != null) {
+            problem.setVisible(problemAddRequest.getVisible());
+        } else {
+            problem.setVisible(0); // 默认公开
+        }
 
         problem.setUserId(loginUser.getId());
         problem.setThumbNum(0);
         problem.setFavourNum(0);
 
-        boolean result = problemService.save(problem);
-        if (!result) {
-            throw new RuntimeException("创建失败");
-        }
+        // ✅ 3. 调用 Service 的新方法，传入 tags 列表，让 Service 去维护关联表
+        long newProblemId = problemService.addProblem(problem, problemAddRequest.getTags());
 
-        return new BaseResponse<>(0, problem.getId(), "创建成功");
+        return ResultUtils.success(newProblemId);
     }
 
     /**
@@ -71,173 +79,168 @@ public class ProblemController {
     @PostMapping("/update")
     public BaseResponse<Boolean> updateProblem(@RequestBody ProblemUpdateRequest problemUpdateRequest, HttpServletRequest request) {
         if (problemUpdateRequest == null || problemUpdateRequest.getId() <= 0) {
-            throw new RuntimeException("参数错误");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
 
         Problem problem = new Problem();
         BeanUtils.copyProperties(problemUpdateRequest, problem);
 
-        // ✨ 复用同一个方法
-        this.setJsonValues(problem, problemUpdateRequest.getTags(), problemUpdateRequest.getJudgeCase(), problemUpdateRequest.getJudgeConfig());
+        // 1. 处理 JSON 字段
+        // ⚠️ 注意：这里也不处理 tags
+        this.setJsonValues(problem, problemUpdateRequest.getJudgeCase(), problemUpdateRequest.getJudgeConfig());
+
+        // 2. 更新可见性
+        if (problemUpdateRequest.getVisible() != null) {
+            problem.setVisible(problemUpdateRequest.getVisible());
+        }
 
         User loginUser = userService.getLoginUser(request);
         long id = problemUpdateRequest.getId();
         Problem oldProblem = problemService.getById(id);
         if (oldProblem == null) {
-            throw new RuntimeException("题目不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
-        if (!loginUser.getId().equals(oldProblem.getUserId()) && !"admin".equals(loginUser.getUserRole())) {
-            throw new RuntimeException("无权修改");
+        if (!loginUser.getId().equals(oldProblem.getUserId()) && !userService.isAdmin(loginUser)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
 
-        boolean result = problemService.updateById(problem);
-        return new BaseResponse<>(0, result, "修改成功");
+        // ✅ 3. 调用 Service 的新方法，同时更新题目和标签关联
+        boolean result = problemService.updateProblem(problem, problemUpdateRequest.getTags());
+
+        return ResultUtils.success(result);
     }
 
     /**
-     * 删除题目
+     * 删除题目 (逻辑保持不变)
      */
     @PostMapping("/delete")
     public BaseResponse<Boolean> deleteProblem(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
-            throw new RuntimeException("参数错误");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-
         User loginUser = userService.getLoginUser(request);
         long id = deleteRequest.getId();
         Problem oldProblem = problemService.getById(id);
         if (oldProblem == null) {
-            throw new RuntimeException("题目不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
-
-        if (!loginUser.getId().equals(oldProblem.getUserId()) && !"admin".equals(loginUser.getUserRole())) {
-            throw new RuntimeException("无权删除");
+        if (!loginUser.getId().equals(oldProblem.getUserId()) && !userService.isAdmin(loginUser)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
-
+        // MyBatis-Plus 逻辑删除，关联表的清理可以写在 XML 里，或者手动删，这里暂时只删题目
         boolean b = problemService.removeById(id);
-        return new BaseResponse<>(0, b, "删除成功");
+        return ResultUtils.success(b);
     }
 
     /**
      * 1. 获取题目详情（管理员/创建者用，返回完整 Entity）
-     * 对应前端的 "修改题目" 页面
      */
     @GetMapping("/get")
     public BaseResponse<Problem> getProblemById(long id, HttpServletRequest request) {
         if (id <= 0) {
-            throw new RuntimeException("参数错误");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         Problem problem = problemService.getById(id);
         if (problem == null) {
-            throw new RuntimeException("题目不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
-
-        // 权限校验：只有管理员或者作者才能看完整数据
         User loginUser = userService.getLoginUser(request);
         if (!problem.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
-            throw new RuntimeException("无权访问完整数据");
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
-
         return ResultUtils.success(problem);
     }
 
     /**
      * 2. 获取题目详情（做题者用，返回脱敏 VO）
-     * 对应前端的 "做题" 页面
      */
     @GetMapping("/get/vo")
-    public BaseResponse<QuestionVO> getProblemVOById(long id, HttpServletRequest request) {
+    public BaseResponse<ProblemVO> getProblemVOById(long id, HttpServletRequest request) {
         if (id <= 0) {
-            throw new RuntimeException("参数错误");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+
+        // 1. 查询题目信息
         Problem problem = problemService.getById(id);
         if (problem == null) {
-            throw new RuntimeException("题目不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
 
-        // 转成 VO
-        QuestionVO questionVO = QuestionVO.objToVo(problem);
+        // 2. 权限校验
+        User loginUser = userService.getLoginUser(request); // 允许未登录
+        boolean isAdmin = loginUser != null && userService.isAdmin(loginUser);
+        if (problem.getVisible() == 1 && !isAdmin) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "该题目为私有题目，不可访问");
+        }
 
-        // 核心脱敏逻辑
-        // 1. 处理测试用例：只保留第一个作为示例
+        // 3. 构造 VO（此处需要注意：objToVo 不再能自动填充 tags，需要 Service 层支持或者单独查）
+        ProblemVO problemVO = problemService.getProblemVO(problem, request);
+
+        // 脱敏
         String judgeCaseStr = problem.getJudgeCase();
-        if (judgeCaseStr != null) {
+        if (StringUtils.isNotBlank(judgeCaseStr)) {
             List<JudgeCase> judgeCaseList = JSONUtil.toList(judgeCaseStr, JudgeCase.class);
             if (CollUtil.isNotEmpty(judgeCaseList)) {
-                // 只取第 0 个
-                List<JudgeCase> oneJudgeCase = Collections.singletonList(judgeCaseList.get(0));
-                // 重新赋值给 VO 的 judgeCase 字段 (注意 VO 里是 Object 或 List 类型，看你的定义)
-                questionVO.setJudgeCase(oneJudgeCase);
+                problemVO.setJudgeCase(Collections.singletonList(judgeCaseList.getFirst()));
             }
         }
+        problemVO.setAnswer(null);
 
-        // 2. 处理答案：直接置空，防止抓包偷看答案
-        questionVO.setAnswer(null);
-
-        return ResultUtils.success(questionVO);
+        return ResultUtils.success(problemVO);
     }
 
     /**
-     * 分页获取题目列表（用户、管理员通用）
+     * 分页获取题目列表（脱敏版）
      */
     @PostMapping("/list/page")
-    public BaseResponse<Page<Problem>> listProblemByPage(@RequestBody ProblemQueryRequest problemQueryRequest, HttpServletRequest request) {
+    public BaseResponse<Page<ProblemVO>> listProblemVOByPage(@RequestBody ProblemQueryRequest problemQueryRequest, HttpServletRequest request) {
         long current = problemQueryRequest.getCurrent();
         long pageSize = problemQueryRequest.getPageSize();
+        if (pageSize > 20) pageSize = 20;
 
-        // 限制爬虫：如果一次要查 20 条以上，强行限制为 20 条，防止服务器压力过大
-        if (pageSize > 20) {
-            pageSize = 20;
+        // 1. 权限与可见性过滤
+        User loginUser = userService.getLoginUser(request);
+        boolean isAdmin = loginUser != null && userService.isAdmin(loginUser);
+        if (!isAdmin) {
+            problemQueryRequest.setVisible(0);
         }
 
-        // 1. 构建查询条件
+        // 2. 构建查询条件
         QueryWrapper<Problem> queryWrapper = new QueryWrapper<>();
         Long id = problemQueryRequest.getId();
         String title = problemQueryRequest.getTitle();
-        String content = problemQueryRequest.getContent();
-        List<String> tags = problemQueryRequest.getTags();
-        Long userId = problemQueryRequest.getUserId();
-        String sortField = problemQueryRequest.getSortField();
-        String sortOrder = problemQueryRequest.getSortOrder();
+        Integer visible = problemQueryRequest.getVisible();
 
-        // 拼接查询条件 (如果不为空，才拼接到 SQL 里)
         queryWrapper.like(StringUtils.isNotBlank(title), "title", title);
-        queryWrapper.like(StringUtils.isNotBlank(content), "content", content);
         queryWrapper.eq(id != null, "id", id);
-        queryWrapper.eq(userId != null, "user_id", userId);
-
-        // 标签查询 (tags 数据库存的是 ["Java", "困难"] 这种 JSON 字符串)
-        // 如果要查包含 "Java" 的，就用 like '%"Java"%'
-        if (tags != null) {
-            for (String tag : tags) {
-                queryWrapper.like("tags", "\"" + tag + "\"");
-            }
+        if (visible != null) {
+            queryWrapper.eq("visible", visible);
         }
 
-        // 未删除的才能查
-        // queryWrapper.eq("is_delete", 0); // MyBatis Plus @TableLogic 逻辑删除会自动加这个，不用手动写
+        // ⚠️ 删除了 tags 过滤逻辑
+        // 因为 tags 字段已删除，且多对多查询 tags 比较复杂，
+        // 如果需要按标签搜题，需要重写 Mapper XML 进行联表查询。
+        // 这里为了防止报错，暂时忽略 tags 搜索条件。
 
-        // 2. 排序
-        queryWrapper.orderBy(StringUtils.isNotBlank(sortField), sortOrder.equals("ascend"), sortField);
+        // 排序
+        String sortField = problemQueryRequest.getSortField();
+        String sortOrder = problemQueryRequest.getSortOrder();
+        queryWrapper.orderBy(StringUtils.isNotBlank(sortField), "ascend".equals(sortOrder), sortField);
 
-        // 3. 分页查询
+        // 3. 查询分页
         Page<Problem> problemPage = problemService.page(new Page<>(current, pageSize), queryWrapper);
 
-        // 4. 脱敏 (可选)
-        // 题目列表其实不需要要把所有的字段都返回（比如 content 和 answer 太长了可以不返回）
-        // 这里暂时先全返回，后面优化再改
+        // 4. ✅ 重点：调用 Service 的 getProblemVOPage 方法
+        // 这个方法会负责去 problem_tag 表和 tag 表查数据，填入 tags 字段
+        Page<ProblemVO> problemVOPage = problemService.getProblemVOPage(problemPage, request);
 
-        return new BaseResponse<>(0, problemPage, "查询成功");
+        return ResultUtils.success(problemVOPage);
     }
 
     /**
-     * ✨ 这是一个私有辅助方法
-     * 专门处理 JSON 字段转换，避免代码重复
+     * JSON 设置辅助方法 (已移除 tags 处理)
      */
-    private void setJsonValues(Problem problem, List<String> tags, Object judgeCase, Object judgeConfig) {
-        if (tags != null) {
-            problem.setTags(GSON.toJson(tags));
-        }
+    private void setJsonValues(Problem problem, Object judgeCase, Object judgeConfig) {
         if (judgeCase != null) {
             problem.setJudgeCase(GSON.toJson(judgeCase));
         }
@@ -245,5 +248,4 @@ public class ProblemController {
             problem.setJudgeConfig(GSON.toJson(judgeConfig));
         }
     }
-
 }

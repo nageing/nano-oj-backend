@@ -1,4 +1,4 @@
-package com.nano.oj.model.dto.problemsubmit;
+package com.nano.oj.model.dto.questionsubmit;
 
 import lombok.Data;
 

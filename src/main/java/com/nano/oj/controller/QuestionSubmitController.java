@@ -6,12 +6,12 @@ import com.nano.oj.common.BaseResponse;
 import com.nano.oj.common.ErrorCode;
 import com.nano.oj.common.ResultUtils;
 import com.nano.oj.exception.BusinessException;
-import com.nano.oj.model.dto.problemsubmit.ProblemRunRequest;
-import com.nano.oj.model.dto.problemsubmit.ProblemSubmitAddRequest;
-import com.nano.oj.model.dto.problemsubmit.ProblemSubmitQueryRequest;
+import com.nano.oj.model.dto.questionsubmit.QuestionRunRequest;
+import com.nano.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
+import com.nano.oj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
 import com.nano.oj.model.entity.QuestionSubmit;
 import com.nano.oj.model.entity.User;
-import com.nano.oj.model.vo.ProblemSubmitVO;
+import com.nano.oj.model.vo.QuestionSubmitVO;
 import com.nano.oj.service.QuestionSubmitService;
 import com.nano.oj.service.UserService;
 import jakarta.annotation.Resource;
@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/problem_submit")
-public class ProblemSubmitController {
+public class QuestionSubmitController {
 
     @Resource
     private QuestionSubmitService questionSubmitService;
@@ -39,16 +39,16 @@ public class ProblemSubmitController {
      * 提交代码
      */
     @PostMapping("/")
-    public BaseResponse<Long> doSubmit(@RequestBody ProblemSubmitAddRequest problemSubmitAddRequest,
+    public BaseResponse<Long> doSubmit(@RequestBody QuestionSubmitAddRequest questionSubmitAddRequest,
                                        HttpServletRequest request) {
-        if (problemSubmitAddRequest == null || problemSubmitAddRequest.getProblemId() <= 0) {
+        if (questionSubmitAddRequest == null || questionSubmitAddRequest.getProblemId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
 
         final User loginUser = userService.getLoginUser(request);
 
         // 调用 QuestionSubmitService
-        long questionSubmitId = questionSubmitService.doQuestionSubmit(problemSubmitAddRequest, loginUser);
+        long questionSubmitId = questionSubmitService.doQuestionSubmit(questionSubmitAddRequest, loginUser);
 
         return ResultUtils.success(questionSubmitId);
     }
@@ -57,15 +57,15 @@ public class ProblemSubmitController {
      * 分页获取提交列表
      */
     @PostMapping("/list/page")
-    public BaseResponse<Page<ProblemSubmitVO>> listProblemSubmitByPage(
-            @RequestBody ProblemSubmitQueryRequest problemSubmitQueryRequest,
+    public BaseResponse<Page<QuestionSubmitVO>> listProblemSubmitByPage(
+            @RequestBody QuestionSubmitQueryRequest questionSubmitQueryRequest,
             HttpServletRequest request) {
-        long current = problemSubmitQueryRequest.getCurrent();
-        long size = problemSubmitQueryRequest.getPageSize();
+        long current = questionSubmitQueryRequest.getCurrent();
+        long size = questionSubmitQueryRequest.getPageSize();
 
         // 1. 获取分页数据
         Page<QuestionSubmit> questionSubmitPage = questionSubmitService.page(new Page<>(current, size),
-                getQueryWrapper(problemSubmitQueryRequest));
+                getQueryWrapper(questionSubmitQueryRequest));
 
         // 2. 获取当前登录用户 (用来判断是否脱敏)
         User loginUser = userService.getLoginUser(request);
@@ -77,7 +77,7 @@ public class ProblemSubmitController {
     /**
      * 补全的方法：获取查询条件
      */
-    private QueryWrapper<QuestionSubmit> getQueryWrapper(ProblemSubmitQueryRequest searchRequest) {
+    private QueryWrapper<QuestionSubmit> getQueryWrapper(QuestionSubmitQueryRequest searchRequest) {
         QueryWrapper<QuestionSubmit> queryWrapper = new QueryWrapper<>();
         if (searchRequest == null) {
             return queryWrapper;
@@ -109,15 +109,15 @@ public class ProblemSubmitController {
      * 运行代码 (自测)
      */
     @PostMapping("/run")
-    public BaseResponse<ProblemSubmitVO> doRun(@RequestBody ProblemRunRequest runRequest,
-                                               HttpServletRequest request) {
+    public BaseResponse<QuestionSubmitVO> doRun(@RequestBody QuestionRunRequest runRequest,
+                                                HttpServletRequest request) {
         if (runRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         // 登录校验
         User loginUser = userService.getLoginUser(request);
 
-        ProblemSubmitVO res = questionSubmitService.doQuestionRun(runRequest, loginUser);
+        QuestionSubmitVO res = questionSubmitService.doQuestionRun(runRequest, loginUser);
         return ResultUtils.success(res);
     }
 }
