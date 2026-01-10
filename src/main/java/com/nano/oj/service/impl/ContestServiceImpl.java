@@ -1,5 +1,6 @@
 package com.nano.oj.service.impl;
 
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -14,6 +15,7 @@ import com.nano.oj.mapper.ContestProblemMapper;
 import com.nano.oj.mapper.QuestionSubmitMapper;
 import com.nano.oj.model.dto.contest.ContestAddRequest;
 import com.nano.oj.model.dto.contest.ContestApplyRequest;
+import com.nano.oj.model.dto.contest.ContestUpdateRequest;
 import com.nano.oj.model.entity.*;
 import com.nano.oj.model.vo.ContestVO;
 import com.nano.oj.model.vo.ProblemVO;
@@ -25,6 +27,7 @@ import jakarta.annotation.Resource;
 import cn.hutool.core.collection.CollUtil;
 
 // 使用 Spring 自带工具类
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.beans.BeanUtils;
@@ -35,6 +38,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> implements ContestService {
 
@@ -74,16 +78,17 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建比赛失败");
         }
 
-        // 2. 获取题目 ID 列表 (这是关键修正点！！！)
-        List<Long> problemIds = contestAddRequest.getProblemIds();
+        // 2. 获取题目 以及分数 列表
+        List<ContestAddRequest.ContestProblemItem> problems = contestAddRequest.getProblems();
 
         // 3. 插入题目关联
-        if (CollUtil.isNotEmpty(problemIds)) {
+        if (CollUtil.isNotEmpty(problems)) {
             // 循环插入并设置 displayId
-            for (int i = 0; i < problemIds.size(); i++) {
+            for (int i = 0; i < problems.size(); i++) {
                 ContestProblem cp = new ContestProblem();
                 cp.setContestId(contest.getId());
-                cp.setQuestionId(problemIds.get(i));
+                cp.setQuestionId(problems.get(i).getId());
+                cp.setScore(problems.get(i).getScore() == null ? 100 : problems.get(i).getScore());
                 cp.setDisplayId(i + 1); // 设置次序：1, 2, 3...
                 contestProblemMapper.insert(cp);
             }
@@ -277,7 +282,6 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
                         if (!isEnded) {
                             baseQuery.ge(QuestionSubmit::getCreateTime, contest.getStartTime());
                             baseQuery.le(QuestionSubmit::getCreateTime, contest.getEndTime());
-                            // ❌ 移除了 .eq(QuestionSubmit::getContestId, id)
                             // 只要是在比赛时间内提交的，不管是从哪提交的，都算数
                         }
                         // 否则(已结束)，不加时间限制，查全部历史
@@ -298,15 +302,12 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
                         }
                     }
                     // -------------------------------------------------------------
-
+                    problemVO.setScore(cp.getScore() != null ? cp.getScore() : 100);
                     problemVOList.add(problemVO);
                 }
                 contestVO.setProblems(problemVOList);
             }
         }
-
-       // System.out.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n####################################" + contestVO.getStatus() + "#################################\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-
         return contestVO;
     }
     /**
@@ -315,34 +316,79 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean updateContest(Contest contest, List<Long> problemIds) {
+    public boolean updateContest(ContestUpdateRequest contestUpdateRequest) {
+        Long contestId = contestUpdateRequest.getId();
+        // 使用占位符 {}，既优雅又快
+        log.info("🐞 [开始更新比赛] id: {}, 参数: {}", contestId, JSONUtil.toJsonStr(contestUpdateRequest));
+
         // 1. 更新比赛基本信息
+        Contest contest = new Contest();
+        BeanUtils.copyProperties(contestUpdateRequest, contest);
+
+        if (contest.getId() == null) {
+            log.error("❌ [更新失败] 比赛ID为空");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
         boolean result = this.updateById(contest);
-        if (!result) return false;
+        log.info("🐞 [基础信息更新] 结果: {}", result);
 
-        // 2. 更新题目关联
-        if (problemIds != null) {
-            // 2.1 删除该比赛原有的所有关联题目
-            LambdaQueryWrapper<ContestProblem> deleteWrapper = new LambdaQueryWrapper<>();
-            deleteWrapper.eq(ContestProblem::getContestId, contest.getId());
-            contestProblemMapper.delete(deleteWrapper);
+        if (!result) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "更新比赛失败");
+        }
 
-            // 2.2 插入新的题目列表
-            if (CollUtil.isNotEmpty(problemIds)) {
-                // ✅ 改用普通 for 循环，方便获取索引 i 来设置 displayId
-                for (int i = 0; i < problemIds.size(); i++) {
+        // 2. 更新题目列表
+        List<ContestAddRequest.ContestProblemItem> problems = contestUpdateRequest.getProblems();
+
+        if (problems == null) {
+            // warn 级别表示警告，需要注意但不是错误
+            log.warn("⚠️ [跳过题目更新] problems字段为null，请检查前端传参是否正确");
+        } else {
+            log.info("🐞 [题目更新] 列表长度: {}", problems.size());
+
+            // A. 删除旧关联
+            QueryWrapper<ContestProblem> deleteWrapper = new QueryWrapper<>();
+            deleteWrapper.eq("contest_id", contestId);
+            int deleteCount = contestProblemMapper.delete(deleteWrapper);
+            log.info("🐞 [删除旧数据] 条数: {}", deleteCount);
+
+            // B. 插入新关联
+            if (CollUtil.isNotEmpty(problems)) {
+                List<ContestProblem> newEntities = new ArrayList<>();
+                for (int i = 0; i < problems.size(); i++) {
+                    ContestAddRequest.ContestProblemItem item = problems.get(i);
+
                     ContestProblem cp = new ContestProblem();
-                    cp.setContestId(contest.getId());
-                    cp.setQuestionId(problemIds.get(i));
-
-                    // ✨✨✨ 关键修复点 ✨✨✨
-                    // 必须设置 displayId，否则数据库会报错
+                    cp.setContestId(contestId);
+                    cp.setQuestionId(item.getId());
                     cp.setDisplayId(i + 1);
 
-                    contestProblemMapper.insert(cp);
+                    // 处理分数
+                    if (item.getScore() != null) {
+                        cp.setScore(item.getScore());
+                    } else {
+                        log.warn("⚠️ [分数缺失] 题目ID: {} 未设置分数，使用默认值 100", item.getId());
+                        cp.setScore(100);
+                    }
+
+                    newEntities.add(cp);
                 }
+
+                // 批量插入
+                // 如果你有 saveBatch 方法最好，没有就循环插
+                int insertCount = 0;
+                for (ContestProblem cp : newEntities) {
+                    contestProblemMapper.insert(cp);
+                    insertCount++;
+                }
+                log.info("✅ [插入新数据] 成功插入条数: {}", insertCount);
+
+            } else {
+                log.info("ℹ️ [题目清空] 前端传入了空列表，比赛题目已被清空");
             }
         }
+
+        log.info("✅ [更新结束] updateContest 执行完毕");
         return true;
     }
 
@@ -375,7 +421,7 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
             // ACM: 解题数降序，罚时升序
             queryWrapper.orderByDesc("solved").orderByAsc("total_time");
         } else {
-            // OI: 总分降序
+            // IOI,OI: 总分降序
             queryWrapper.orderByDesc("total_score");
         }
 

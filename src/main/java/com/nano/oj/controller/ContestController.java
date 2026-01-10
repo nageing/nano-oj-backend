@@ -96,7 +96,7 @@ public class ContestController {
         BeanUtils.copyProperties(contestUpdateRequest, contest);
 
         // 调用 Service 处理更新
-        boolean result = contestService.updateContest(contest, contestUpdateRequest.getProblemIds());
+        boolean result = contestService.updateContest(contestUpdateRequest);
         return ResultUtils.success(result);
     }
 

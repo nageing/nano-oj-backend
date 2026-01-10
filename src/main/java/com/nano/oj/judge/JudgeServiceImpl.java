@@ -10,10 +10,13 @@ import com.nano.oj.judge.codesandbox.model.ExecuteCodeResponse;
 import com.nano.oj.model.dto.problem.JudgeCase;
 import com.nano.oj.model.dto.problem.JudgeConfig;
 import com.nano.oj.model.dto.questionsubmit.JudgeInfo;
+import com.nano.oj.model.entity.ContestProblem; // 引入实体
 import com.nano.oj.model.entity.Problem;
 import com.nano.oj.model.entity.QuestionSubmit;
+import com.nano.oj.service.ContestProblemService; // 引入服务
 import com.nano.oj.service.ProblemService;
 import com.nano.oj.service.QuestionSubmitService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper; // 引入 MP Wrapper
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,7 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.stream.Collectors;
+
 @Slf4j
 @Service
 public class JudgeServiceImpl implements JudgeService {
@@ -30,6 +34,9 @@ public class JudgeServiceImpl implements JudgeService {
 
     @Resource
     private ProblemService problemService;
+
+    @Resource
+    private ContestProblemService contestProblemService; // ✅ 1. 注入比赛题目服务
 
     @Resource
     private CodeSandbox dockerCodeSandbox;
@@ -52,13 +59,12 @@ public class JudgeServiceImpl implements JudgeService {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "题目不存在");
         }
 
-        // 3. 校验状态 (防止重复判题)
-        // 假设 0 = 待判题, 1 = 判题中, 2 = 成功, 3 = 失败
+        // 3. 校验状态
         if (!questionSubmit.getStatus().equals(0)) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "题目正在判题中");
         }
 
-        // 4. 更新状态为“判题中” (status = 1)
+        // 4. 更新状态为“判题中”
         QuestionSubmit updateQuestionSubmit = new QuestionSubmit();
         updateQuestionSubmit.setId(questionSubmitId);
         updateQuestionSubmit.setStatus(1);
@@ -70,6 +76,11 @@ public class JudgeServiceImpl implements JudgeService {
         // 5. 准备判题参数
         String judgeCaseStr = problem.getJudgeCase();
         List<JudgeCase> judgeCaseList = JSONUtil.toList(judgeCaseStr, JudgeCase.class);
+        // 如果题目没有判题用例，防御性处理
+        if (judgeCaseList == null || judgeCaseList.isEmpty()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "题目判题用例缺失");
+        }
+
         List<String> inputList = judgeCaseList.stream().map(JudgeCase::getInput).collect(Collectors.toList());
         List<String> expectedOutputList = judgeCaseList.stream().map(JudgeCase::getOutput).toList();
 
@@ -83,13 +94,14 @@ public class JudgeServiceImpl implements JudgeService {
                 .language(questionSubmit.getLanguage())
                 .inputList(inputList)
                 .timeLimit(timeLimit)
-                .memoryLimit(memoryLimit * 1024L) // KB 转 Byte
+                .memoryLimit(memoryLimit * 1024L)
                 .build();
 
         ExecuteCodeResponse executeCodeResponse = dockerCodeSandbox.executeCode(executeCodeRequest);
 
         // 7. 初始化判题结果
         JudgeInfo judgeInfo = new JudgeInfo();
+        // 处理沙箱返回的资源消耗，防止空指针
         if (executeCodeResponse.getJudgeInfo() != null) {
             judgeInfo.setMemory(executeCodeResponse.getJudgeInfo().getMemory());
             judgeInfo.setTime(executeCodeResponse.getJudgeInfo().getTime());
@@ -97,15 +109,14 @@ public class JudgeServiceImpl implements JudgeService {
             judgeInfo.setMemory(0L);
             judgeInfo.setTime(0L);
         }
-        judgeInfo.setScore(0); // 默认为0分
+        judgeInfo.setScore(0); // 默认为0
 
-        // ==================== 8. 开始核心判题逻辑 ====================
+        // ==================== 异常情况处理 (直接返回) ====================
 
         // A. 编译错误
         if ("Compile Error".equals(executeCodeResponse.getMessage())) {
             judgeInfo.setMessage("Compile Error");
             judgeInfo.setDetail(executeCodeResponse.getJudgeInfo() != null ? executeCodeResponse.getJudgeInfo().getDetail() : "编译错误");
-            // 状态 2 表示判题流程结束（虽然结果是错的）
             updateAndNotify(questionSubmitId, 2, judgeInfo);
             return questionSubmitService.getById(questionSubmitId);
         }
@@ -114,36 +125,33 @@ public class JudgeServiceImpl implements JudgeService {
         if ("System Error".equals(executeCodeResponse.getMessage())) {
             judgeInfo.setMessage("System Error");
             judgeInfo.setDetail(executeCodeResponse.getJudgeInfo() != null ? executeCodeResponse.getJudgeInfo().getDetail() : "系统错误");
-            // 状态 3 表示系统异常
             updateAndNotify(questionSubmitId, 3, judgeInfo);
             return questionSubmitService.getById(questionSubmitId);
         }
 
-        // C. 运行错误 (Runtime Error)
-        if (executeCodeResponse.getStatus() != 1) { // 假设 1 代表运行正常
+        // C. 运行错误
+        if (executeCodeResponse.getStatus() != 1) {
             judgeInfo.setMessage("Runtime Error");
             judgeInfo.setDetail(executeCodeResponse.getMessage());
             updateAndNotify(questionSubmitId, 2, judgeInfo);
             return questionSubmitService.getById(questionSubmitId);
         }
 
-        // D. 超时 (TLE)
-        Long runTime = judgeInfo.getTime();
-        if (timeLimit > 0 && runTime > timeLimit) {
+        // D. 超时
+        if (timeLimit > 0 && judgeInfo.getTime() > timeLimit) {
             judgeInfo.setMessage("Time Limit Exceeded");
             updateAndNotify(questionSubmitId, 2, judgeInfo);
             return questionSubmitService.getById(questionSubmitId);
         }
 
-        // E. 超内存 (MLE)
-        Long runMemory = judgeInfo.getMemory();
-        if (memoryLimit > 0 && runMemory > memoryLimit) {
+        // E. 超内存
+        if (memoryLimit > 0 && judgeInfo.getMemory() > memoryLimit) {
             judgeInfo.setMessage("Memory Limit Exceeded");
             updateAndNotify(questionSubmitId, 2, judgeInfo);
             return questionSubmitService.getById(questionSubmitId);
         }
 
-        // F. 答案比对 (AC / WA)
+        // F. 输出数量检查
         List<String> outputList = executeCodeResponse.getOutputList();
         if (outputList == null || outputList.size() != inputList.size()) {
             judgeInfo.setMessage("Wrong Answer");
@@ -152,7 +160,9 @@ public class JudgeServiceImpl implements JudgeService {
             return questionSubmitService.getById(questionSubmitId);
         }
 
-        // 统计通过数
+        // ==================== ✅ 核心判题逻辑修正 ====================
+
+        // 1. 统计通过数
         int passCount = 0;
         int totalCount = judgeCaseList.size();
         for (int i = 0; i < totalCount; i++) {
@@ -161,11 +171,30 @@ public class JudgeServiceImpl implements JudgeService {
             }
         }
 
-        // 计算分数 (OI)
-        int score = (int) ((double) passCount / totalCount * 100);
+        // 2. ✅ 获取题目满分配置 (关键修复)
+        int maxScore = 100; // 默认满分 100
+        Long contestId = questionSubmit.getContestId();
+
+        // 如果是比赛提交，尝试去查比赛题目关联表里的自定义分数
+        if (contestId != null && contestId > 0) {
+            ContestProblem contestProblem = contestProblemService.getOne(
+                    new LambdaQueryWrapper<ContestProblem>()
+                            .eq(ContestProblem::getContestId, contestId)
+                            .eq(ContestProblem::getQuestionId, problemId)
+                            .select(ContestProblem::getScore) // 优化性能，只查 score
+            );
+            if (contestProblem != null && contestProblem.getScore() != null) {
+                maxScore = contestProblem.getScore();
+            }
+        }
+
+        // 3. ✅ 计算加权分数
+        // 逻辑：(通过数 / 总数) * 满分
+        // 注意：先转 double 计算比例，再乘 maxScore，最后转 int
+        int score = (int) ((double) passCount / totalCount * maxScore);
         judgeInfo.setScore(score);
 
-        // 最终判定
+        // 4. 判定最终状态
         if (passCount == totalCount) {
             judgeInfo.setMessage("Accepted");
         } else {
@@ -177,34 +206,19 @@ public class JudgeServiceImpl implements JudgeService {
         return questionSubmitService.getById(questionSubmitId);
     }
 
-    /**
-     * 封装：更新数据库 + 发送 MQ 消息
-     */
     private void updateAndNotify(Long submitId, Integer status, JudgeInfo judgeInfo) {
-        // 1. 更新数据库
         QuestionSubmit updateQuestionSubmit = new QuestionSubmit();
         updateQuestionSubmit.setId(submitId);
         updateQuestionSubmit.setStatus(status);
         updateQuestionSubmit.setJudgeInfo(JSONUtil.toJsonStr(judgeInfo));
-
-        if (judgeInfo.getScore() != null) {
-            updateQuestionSubmit.setScore(judgeInfo.getScore());
-        } else {
-            updateQuestionSubmit.setScore(0);
-        }
+        // 将计算出的分数同步到 submit 表的 score 字段，方便排行榜直接读取
+        updateQuestionSubmit.setScore(judgeInfo.getScore() != null ? judgeInfo.getScore() : 0);
 
         boolean update = questionSubmitService.updateById(updateQuestionSubmit);
 
-        // 2. 发送 MQ 消息 (通知排行榜)
         if (update) {
-            // 防止 MQ 发送失败影响判题流程，加个 try-catch
             try {
-                rabbitTemplate.convertAndSend(
-                        MqConfig.JUDGE_EXCHANGE,
-                        MqConfig.JUDGE_ROUTING_KEY,
-                        String.valueOf(submitId)
-                );
-                log.info("判题完成，MQ消息已发送，submitId: {}", submitId);
+                rabbitTemplate.convertAndSend(MqConfig.JUDGE_EXCHANGE, MqConfig.JUDGE_ROUTING_KEY, String.valueOf(submitId));
             } catch (Exception e) {
                 log.error("判题完成，MQ消息发送失败，submitId: {}", submitId, e);
             }
@@ -214,10 +228,13 @@ public class JudgeServiceImpl implements JudgeService {
     private boolean checkOutput(String expected, String actual) {
         if (expected == null) expected = "";
         if (actual == null) actual = "";
-        expected = expected.trim();
-        actual = actual.trim();
-        String[] expectedTokens = expected.split("\\s+");
-        String[] actualTokens = actual.split("\\s+");
+
+        // 移除首尾空白字符 (trim)
+        // 更加稳健的比较：把所有连续空白字符(空格、制表符、换行)都视为一个分隔符
+        // 这样 "1 2" 和 "1   2" 或者 "1\n2" 都会被视为相等，符合大多数 OJ 规范
+        String[] expectedTokens = expected.trim().split("\\s+");
+        String[] actualTokens = actual.trim().split("\\s+");
+
         if (expectedTokens.length != actualTokens.length) return false;
         for (int i = 0; i < expectedTokens.length; i++) {
             if (!expectedTokens[i].equals(actualTokens[i])) return false;

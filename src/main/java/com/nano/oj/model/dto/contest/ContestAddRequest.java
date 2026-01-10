@@ -22,9 +22,22 @@ public class ContestAddRequest implements Serializable {
     private Integer type; // 赛制
 
     /**
-     * 关联的题目 ID 列表
+     * 关联的题目 列表
      */
-    private List<Long> problemIds;
+    private List<ContestProblemItem> problems;
+
+    @Data
+    public static class ContestProblemItem implements Serializable {
+        /**
+         * 题目 ID
+         */
+        private Long id;
+
+        /**
+         * 题目分数 (前端传过来的)
+         */
+        private Integer score;
+    }
 
     private static final long serialVersionUID = 1L;
 }

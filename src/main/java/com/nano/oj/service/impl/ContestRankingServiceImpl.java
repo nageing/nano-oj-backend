@@ -2,12 +2,14 @@ package com.nano.oj.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.nano.oj.mapper.ContestProblemMapper;
 import com.nano.oj.mapper.ContestRankingMapper;
 import com.nano.oj.model.entity.*;
 import com.nano.oj.service.ContestProblemService;
 import com.nano.oj.service.ContestRankingService;
 import com.nano.oj.service.UserService;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import cn.hutool.json.JSONUtil;
@@ -19,6 +21,7 @@ import java.util.Map;
 /**
  * 比赛排行榜服务实现类
  */
+@Slf4j
 @Service
 public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper, ContestRanking>
         implements ContestRankingService {
@@ -29,6 +32,9 @@ public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper,
     // ✅ 注入这个 Service，用来查题目在比赛中的设定分数
     @Resource
     private ContestProblemService contestProblemService;
+
+    @Resource
+    private ContestProblemMapper contestProblemMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -92,7 +98,7 @@ public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper,
         boolean isAccepted = judgeInfo != null && "Accepted".equals(judgeInfo.getMessage());
 
         // 🟢【新增逻辑】：查询当前题目在这场比赛中的满分配置
-        int problemMaxScore = 100; // 默认值
+        int problemMaxScore = (submit.getScore() == null) ? 0 : submit.getScore();
         ContestProblem contestProblem = contestProblemService.getOne(
                 new LambdaQueryWrapper<ContestProblem>()
                         .eq(ContestProblem::getContestId, contestId)
@@ -102,6 +108,7 @@ public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper,
         if (contestProblem != null && contestProblem.getScore() != null) {
             problemMaxScore = contestProblem.getScore();
         }
+        log.info("#############################题目分数{}",problemMaxScore);
         // -------------------------------------------------------
         // 5. 根据赛制分别处理
         // -------------------------------------------------------
@@ -111,9 +118,7 @@ public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper,
             // 只有当这道题【之前没有 AC】时，才更新排行榜
             // (如果已经 AC 过了，再提交只更新记录，不影响排名)
             // 如果这道题之前【没 AC 过】，才进行更新
-            System.out.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n##########################!!!!\n" + problemInfo.getStatus() + "\n" + isAccepted + "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n##########################");
             if (problemInfo.getStatus() != 1) {
-                System.out.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n##########################\n" + problemInfo.getStatus() + "\n" + isAccepted + "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n##########################");
                 if (isAccepted) {
                     // ✅ AC 了
                     problemInfo.setStatus(1);
@@ -129,22 +134,32 @@ public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper,
                     ranking.setTotalTime(ranking.getTotalTime() + penalty);
                 } else {
                     problemInfo.setErrorNum(problemInfo.getErrorNum() + 1);
-                    System.out.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n##########################\n" + problemInfo.getErrorNum() + "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n##########################");
                 }
             }
         } else {
-            // ==================== OI 赛制 ====================
+            // ==================== IOI 赛制 ====================
 
             // 计算本次提交的实际得分
             int currentScore;
-            if (submit.getScore() != null) {
-                // 如果判题机返回了具体分数，直接用
-                currentScore = submit.getScore();
-            } else {
-                // 如果判题机只返回了状态没返回分数，手动计算 (AC=满分, 否则=0)
-                currentScore = isAccepted ? problemMaxScore : 0;
-            }
 
+            // 1. 如果是 AC (Accepted)，直接给该题设定的满分 (忽略判题机可能返回的0分)
+            if (isAccepted) {
+                currentScore = problemMaxScore;
+            }
+            // 2. 如果没 AC，但判题机给了分数 (针对部分分场景，如通过了50%的用例)
+            else if (submit.getScore() != null && submit.getScore() > 0) {
+                currentScore = submit.getScore();
+            }
+            // 3. 既没 AC 也没分，那就是 0 分
+            else {
+                currentScore = 0;
+            }
+            log.info("🏁 [IOI评分] 题目: {}, 判题结果: {}, 配置满分: {}, 判题机返回分: {}, ==> 最终计分: {}",
+                    questionId,
+                    judgeInfo.getMessage(),
+                    problemMaxScore,
+                    submit.getScore(),
+                    currentScore);
             // OI 核心逻辑：取最高分
             int oldScore = problemInfo.getScore();
             if (currentScore > oldScore) {

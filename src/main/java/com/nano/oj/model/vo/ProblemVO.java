@@ -98,6 +98,12 @@ public class ProblemVO implements Serializable {
      * 可见性
      */
     private Integer visible;
+
+    /**
+     * 题目分数 (仅在比赛详情接口中有值)
+     */
+    private Integer score;
+
     private static final long serialVersionUID = 1L;
 
     /**

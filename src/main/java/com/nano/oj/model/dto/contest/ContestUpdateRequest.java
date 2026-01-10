@@ -39,11 +39,6 @@ public class ContestUpdateRequest implements Serializable {
     private Integer visible;
 
     /**
-     * 关联的题目 ID 列表（更新时可能会变动）
-     */
-    private List<Long> problemIds;
-
-    /**
      * 赛制
      */
     private Integer type;
@@ -52,5 +47,23 @@ public class ContestUpdateRequest implements Serializable {
      * 状态
      */
     private Integer status;
+
+    /**
+     * 关联的题目 列表
+     */
+    private List<ContestAddRequest.ContestProblemItem> problems;
+
+    @Data
+    public static class ContestProblemItem implements Serializable {
+        /**
+         * 题目 ID
+         */
+        private Long id;
+
+        /**
+         * 题目分数 (前端传过来的)
+         */
+        private Integer score;
+    }
     private static final long serialVersionUID = 1L;
 }

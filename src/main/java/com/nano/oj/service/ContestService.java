@@ -6,6 +6,7 @@ import com.nano.oj.common.BaseResponse;
 import com.nano.oj.model.dto.contest.ContestAddRequest;
 import com.nano.oj.model.dto.contest.ContestApplyRequest;
 import com.nano.oj.model.dto.contest.ContestQueryRequest;
+import com.nano.oj.model.dto.contest.ContestUpdateRequest;
 import com.nano.oj.model.entity.Contest;
 import com.nano.oj.model.entity.ContestRanking;
 import com.nano.oj.model.entity.User;
@@ -23,7 +24,7 @@ public interface ContestService extends IService<Contest> {
     /**
      * 新比赛信息（包括题目列表）
      */
-    boolean updateContest(Contest contest, List<Long> problemIds);
+    boolean updateContest(ContestUpdateRequest contestUpdateRequest);
 
     /**
      * 删除比赛（包括关联数据）
