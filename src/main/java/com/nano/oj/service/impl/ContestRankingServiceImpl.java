@@ -97,18 +97,21 @@ public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper,
         JudgeInfo judgeInfo = JSONUtil.toBean(submit.getJudgeInfo(), JudgeInfo.class);
         boolean isAccepted = judgeInfo != null && "Accepted".equals(judgeInfo.getMessage());
 
-        // 🟢【新增逻辑】：查询当前题目在这场比赛中的满分配置
-        int problemMaxScore = (submit.getScore() == null) ? 0 : submit.getScore();
+        // 🟢【通用逻辑】：查询当前题目的配置满分 (IOI 和 OI 都需要)
+        int problemMaxScore = 0;
+        if (submit.getScore() != null) {
+            problemMaxScore = submit.getScore(); // 如果submit自带了分数(判题机算的)
+        }
+        // 查比赛配置的分数覆盖
         ContestProblem contestProblem = contestProblemService.getOne(
                 new LambdaQueryWrapper<ContestProblem>()
                         .eq(ContestProblem::getContestId, contestId)
                         .eq(ContestProblem::getQuestionId, questionId)
-                        .select(ContestProblem::getScore) // 只查分数优化性能
+                        .select(ContestProblem::getScore)
         );
         if (contestProblem != null && contestProblem.getScore() != null) {
             problemMaxScore = contestProblem.getScore();
         }
-        log.info("#############################题目分数{}",problemMaxScore);
         // -------------------------------------------------------
         // 5. 根据赛制分别处理
         // -------------------------------------------------------
@@ -136,7 +139,7 @@ public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper,
                     problemInfo.setErrorNum(problemInfo.getErrorNum() + 1);
                 }
             }
-        } else {
+        } else if (contest.getType() == 1) {
             // ==================== IOI 赛制 ====================
 
             // 计算本次提交的实际得分
@@ -172,6 +175,34 @@ public class ContestRankingServiceImpl extends ServiceImpl<ContestRankingMapper,
                 // 更新总榜得分：加上差值 (比如原来 30 分，现在 100 分，总分 +70)
                 ranking.setTotalScore(ranking.getTotalScore() + (currentScore - oldScore));
             }
+        } else {
+            // -------------------- OI 赛制 (取最后一次) --------------------
+            // 逻辑：不管考得怎么样，直接覆盖旧成绩 (Last Submission Strategy)
+            // 配合前端/Controller层的"暗箱操作"，虽然这里存了，但用户看不见
+
+            // 1. 计算本次得分
+            int currentScore;
+            if (isAccepted) {
+                currentScore = problemMaxScore;
+            } else if (submit.getScore() != null) {
+                currentScore = submit.getScore();
+            } else {
+                currentScore = 0;
+            }
+
+            // 2. 核心：直接覆盖 (Overwrite Strategy)
+            int oldScore = problemInfo.getScore() == null ? 0 : problemInfo.getScore();
+
+            // 更新单题信息
+            problemInfo.setScore(currentScore);
+            problemInfo.setStatus(currentScore >= problemMaxScore ? 1 : 2);
+            // OI 也可以记录一下最后一次提交的耗时
+            long passTime = (submit.getCreateTime().getTime() - contest.getStartTime().getTime()) / 1000;
+            problemInfo.setTime(passTime);
+
+            // 更新总分 (先减去旧的，再加上新的)
+            int oldTotal = ranking.getTotalScore() == null ? 0 : ranking.getTotalScore();
+            ranking.setTotalScore(oldTotal - oldScore + currentScore);
         }
 
         // -------------------------------------------------------

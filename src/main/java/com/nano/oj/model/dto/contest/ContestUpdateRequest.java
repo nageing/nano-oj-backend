@@ -53,17 +53,10 @@ public class ContestUpdateRequest implements Serializable {
      */
     private List<ContestAddRequest.ContestProblemItem> problems;
 
-    @Data
-    public static class ContestProblemItem implements Serializable {
-        /**
-         * 题目 ID
-         */
-        private Long id;
+    /**
+     * 展示标题
+     */
+    private String displayTitle;
 
-        /**
-         * 题目分数 (前端传过来的)
-         */
-        private Integer score;
-    }
     private static final long serialVersionUID = 1L;
 }

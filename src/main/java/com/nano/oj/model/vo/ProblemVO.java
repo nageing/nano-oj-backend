@@ -104,6 +104,16 @@ public class ProblemVO implements Serializable {
      */
     private Integer score;
 
+    /**
+     * 赛内展示题号
+     */
+    private Integer displayId;
+
+    /**
+     * 赛内展示题号
+     */
+    private String displayTitle;
+
     private static final long serialVersionUID = 1L;
 
     /**

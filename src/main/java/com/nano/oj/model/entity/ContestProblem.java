@@ -26,6 +26,7 @@ public class ContestProblem implements Serializable {
      */
     private Long questionId;
 
+
     /**
      * 在比赛中的顺序号 (0, 1, 2...)
      */
@@ -36,9 +37,24 @@ public class ContestProblem implements Serializable {
      */
     private String displayTitle;
 
+    /**
+     * 创建时间
+     */
     private Date createTime;
+
+    /**
+     * 更新时间
+     */
     private Date updateTime;
+
+    /**
+     * 分数
+     */
     private Integer score;
+
+    /**
+     * 是否删除
+     */
     @TableLogic
     private Integer isDelete;
 

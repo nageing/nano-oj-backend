@@ -40,6 +40,11 @@ public class QuestionSubmitVO implements Serializable {
     private ProblemVO problemVO;
 
 
+     private Long contestId;
+
+     private Integer Score;
+
+
 
     /**
      * 对象转包装类

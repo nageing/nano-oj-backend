@@ -37,6 +37,16 @@ public class ContestAddRequest implements Serializable {
          * 题目分数 (前端传过来的)
          */
         private Integer score;
+
+        /**
+         * 原本标题
+         */
+        private String title;
+
+        /**
+         * 展示标题
+         */
+        private String displayTitle;
     }
 
     private static final long serialVersionUID = 1L;
